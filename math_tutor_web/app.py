@@ -161,10 +161,8 @@ def render_home():
   <div style="font-size:0.7rem; color:#4a4540; font-style:italic;">{subtitle}</div>
 </div>
 """, unsafe_allow_html=True)
-                if implemented:
-                    if st.button("Open →", key=f"home_{n}"):
-                        st.session_state["nav"] = f"{n:02d}. {name}"
-                        st.rerun()
+                if not implemented:
+                    st.markdown('<div style="font-size:0.7rem;color:#b0a090;padding:0.2rem 0;">Coming soon</div>', unsafe_allow_html=True)
 
 
 # ── Router ────────────────────────────────────────────────────────────────────
