@@ -208,6 +208,74 @@ def render_home():
 </div>
 """, unsafe_allow_html=True)
 
+    # ── Feedback section ──────────────────────────────────────────────────────
+    st.markdown(f"""
+<div style="margin:4rem 0 1.5rem; max-width:680px;">
+  <div style="width:48px; height:2px; background:{warm}; margin-bottom:1.8rem;"></div>
+  <h2 style="font-family:'Fraunces',serif; font-size:1.9rem; font-weight:400;
+             color:{ink}; margin:0 0 0.8rem;">Share your thoughts.</h2>
+  <p style="font-size:0.93rem; font-weight:300; color:{ink2};
+            line-height:1.8; margin:0 0 1.5rem; max-width:560px;">
+    This program is a work in progress — and your experience is the best way
+    to improve it. Whether you found something confusing, something that worked
+    beautifully, or something missing entirely: I want to hear it.
+    Every piece of feedback, however small, shapes what this becomes.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    with st.form("feedback_form", clear_on_submit=True):
+        col_a, col_b = st.columns([2, 1])
+        with col_a:
+            comment = st.text_area(
+                "What's on your mind?",
+                placeholder="Which module did you try? What worked well? What was unclear? What would you add?",
+                height=130,
+            )
+        with col_b:
+            rating = st.select_slider(
+                "Overall rating",
+                options=["1 — poor", "2 — fair", "3 — good", "4 — great", "5 — excellent"],
+                value="3 — good",
+            )
+            name_field = st.text_input("Your name (optional)", placeholder="Anonymous")
+
+        submitted = st.form_submit_button("Send feedback →")
+        if submitted:
+            if comment.strip():
+                # Store in session for display (no external DB needed)
+                if "feedbacks" not in st.session_state:
+                    st.session_state["feedbacks"] = []
+                st.session_state["feedbacks"].append({
+                    "name": name_field.strip() or "Anonymous",
+                    "rating": rating[0],
+                    "comment": comment.strip(),
+                })
+                st.success("Thank you — your feedback has been received. It genuinely helps.")
+            else:
+                st.warning("Please write something before sending.")
+
+    # Show collected feedback (this session)
+    feedbacks = st.session_state.get("feedbacks", [])
+    if feedbacks:
+        st.markdown(f"""
+<div style="margin-top:1.5rem; font-family:'DM Mono',monospace; font-size:0.56rem;
+            letter-spacing:0.16em; text-transform:uppercase; color:{sand};
+            margin-bottom:0.8rem;">Feedback received this session</div>
+""", unsafe_allow_html=True)
+        for fb in feedbacks:
+            stars = "★" * int(fb["rating"]) + "☆" * (5 - int(fb["rating"]))
+            st.markdown(f"""
+<div style="background:{card}; border:1px solid {bdr}; border-left:3px solid {warm};
+            border-radius:0 8px 8px 0; padding:0.9rem 1.1rem; margin-bottom:0.6rem;">
+  <div style="display:flex; justify-content:space-between; margin-bottom:0.4rem;">
+    <span style="font-size:0.8rem; font-weight:500; color:{ink};">{fb['name']}</span>
+    <span style="color:#c8a050; font-size:0.8rem;">{stars}</span>
+  </div>
+  <div style="font-size:0.83rem; color:{ink2}; line-height:1.65;">{fb['comment']}</div>
+</div>
+""", unsafe_allow_html=True)
+
 
 # ── Router ────────────────────────────────────────────────────────────────────
 if selection == "Home":
