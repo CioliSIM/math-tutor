@@ -403,6 +403,323 @@ def plot_motion_fig(r):
     except: return None
 
 
+# ── SECOND DERIVATIVE & CONCAVITY ────────────────────────────────────────────
+
+def solve_second_deriv(expr_str):
+    steps = []
+    def add(l, b, v=""): steps.append((l, b, v))
+
+    try:
+        expr   = sp.sympify(expr_str)
+        df     = sp.diff(expr, x_sym)
+        d2f    = sp.diff(df, x_sym)
+        df_s   = sp.simplify(df)
+        d2f_s  = sp.simplify(d2f)
+    except Exception as e:
+        add("Error", str(e), "error"); return {"steps": steps}
+
+    add("The second derivative",
+        """f''(x) is the derivative of f'(x) — the rate of change of the slope.<br><br>
+<strong>f''(x) &gt; 0</strong> → slope is increasing → curve bends <strong>upward ∪</strong> (concave up)<br>
+<strong>f''(x) &lt; 0</strong> → slope is decreasing → curve bends <strong>downward ∩</strong> (concave down)<br>
+<strong>f''(x) = 0</strong> → candidate <strong>inflection point</strong> (concavity may change)<br><br>
+Second derivative test for critical points:<br>
+f'(c)=0 and f''(c)&gt;0 → <strong>local minimum</strong> ∪<br>
+f'(c)=0 and f''(c)&lt;0 → <strong>local maximum</strong> ∩<br>
+f'(c)=0 and f''(c)=0 → <strong>inconclusive</strong> (use first derivative test)""",
+        "warm")
+
+    add("Derivatives",
+        f"f(x) = {expr}<br>f'(x) = {df_s}<br>f''(x) = <strong>{d2f_s}</strong>")
+
+    # inflection points
+    infl_raw = sp.solve(d2f, x_sym)
+    infl     = [c for c in infl_raw if c.is_real]
+    if infl:
+        rows = ""
+        for c in infl:
+            fv = sp.simplify(expr.subs(x_sym, c))
+            rows += f"x={float(c):.4f}: f({float(c):.4f})={fv} — verify sign change of f'' around this point<br>"
+        add("Candidate inflection points (f''=0)", rows)
+
+    # critical points with second derivative test
+    crits = [c for c in sp.solve(df, x_sym) if c.is_real]
+    if crits:
+        rows = ""
+        for c in crits:
+            fv  = sp.simplify(expr.subs(x_sym, c))
+            d2v = sp.simplify(d2f.subs(x_sym, c))
+            if d2v.is_real:
+                if d2v > 0:   verdict = "LOCAL MINIMUM ∪"
+                elif d2v < 0: verdict = "LOCAL MAXIMUM ∩"
+                else:         verdict = "Inconclusive — use first derivative test"
+            else:
+                verdict = "Check manually"
+            rows += f"x={float(c):.4f}: f={fv}, f''={sp.simplify(d2v)} → {verdict}<br>"
+        add("Critical points — second derivative test", rows, "sage")
+
+    return {"steps": steps, "expr": expr, "df": df, "d2f": d2f}
+
+
+def plot_second_deriv(r):
+    expr=r["expr"]; df=r["df"]; d2f=r["d2f"]
+    f_n  = sp.lambdify(x_sym, expr, "numpy")
+    df_n = sp.lambdify(x_sym, df,   "numpy")
+    d2_n = sp.lambdify(x_sym, d2f,  "numpy")
+    x_r  = np.linspace(-3, 3, 500)
+    try:
+        yf  = np.array(f_n(x_r),  dtype=float)
+        ydf = np.array(df_n(x_r), dtype=float)
+        yd2 = np.array(d2_n(x_r), dtype=float)
+        fig, axes = plt.subplots(1,3,figsize=(12,4)); fig.patch.set_facecolor("#fdfaf5")
+        colors = ["#3d6b5e","#e8602a","#c8a96e"]
+        labels = ["f(x)","f'(x)","f''(x)"]
+        for ax,y,col,lbl in zip(axes,[yf,ydf,yd2],colors,labels):
+            ax.set_facecolor("#fdfaf5")
+            ax.spines[["top","right"]].set_visible(False)
+            ax.spines["bottom"].set_color("#e0d8cc"); ax.spines["left"].set_color("#e0d8cc")
+            ax.tick_params(colors="#4a4540",labelsize=8.5)
+            ax.grid(True,alpha=0.2,color="#e0d8cc")
+            ax.axhline(0,color="#1a1814",linewidth=0.6)
+            ax.plot(x_r,np.where(np.isfinite(y),y,np.nan),color=col,linewidth=2.2,label=lbl)
+            if lbl in ["f'(x)","f''(x)"]:
+                ax.fill_between(x_r,np.where(np.isfinite(y),y,0),0,
+                                where=np.isfinite(y)&(y>0),alpha=0.15,color=col)
+                ax.fill_between(x_r,np.where(np.isfinite(y),y,0),0,
+                                where=np.isfinite(y)&(y<0),alpha=0.15,color="#e8602a")
+            y_fin=y[np.isfinite(y)]
+            if len(y_fin)>0: ax.set_ylim(np.percentile(y_fin,2),np.percentile(y_fin,98))
+            ax.legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
+            ax.set_xlabel("x",color="#4a4540",fontsize=9)
+        plt.tight_layout(); return fig
+    except: return None
+
+
+# ── ROLLE'S THEOREM ───────────────────────────────────────────────────────────
+
+def solve_rolle(expr_str, a, b):
+    steps = []
+    def add(l, bo, v=""): steps.append((l, bo, v))
+
+    try:
+        expr = sp.sympify(expr_str)
+        df   = sp.diff(expr, x_sym)
+        fa   = float(expr.subs(x_sym, a))
+        fb   = float(expr.subs(x_sym, b))
+    except Exception as e:
+        add("Error", str(e), "error"); return {"steps": steps}
+
+    add("Rolle's Theorem",
+        """<strong>Hypotheses:</strong><br>
+1. f is <em>continuous</em> on [a, b]<br>
+2. f is <em>differentiable</em> on (a, b)<br>
+3. <span class="mf">f(a) = f(b)</span><br><br>
+<strong>Conclusion:</strong> there exists at least one c ∈ (a, b) such that
+<span class="mf">f'(c) = 0</span><br><br>
+<em>Intuition:</em> if a function starts and ends at the same height,
+it must have at least one horizontal tangent somewhere in between.
+It cannot go up and come back without turning around.<br><br>
+Rolle's Theorem is the special case of Lagrange's Theorem when f(a)=f(b).""",
+        "warm")
+
+    add(f"Check hypothesis 3: f(a) = f(b)?",
+        f"f({a}) = {fa:.6f}<br>f({b}) = {fb:.6f}<br><br>"
+        + ("f(a) = f(b) ✓ — hypothesis satisfied." if abs(fa-fb)<1e-9
+           else f"f(a) ≠ f(b) (difference = {abs(fa-fb):.4f}) — Rolle's theorem does NOT apply.<br>"
+                "There may still be points where f'=0, but the theorem doesn't guarantee it."),
+        "sage" if abs(fa-fb)<1e-9 else "error")
+
+    # Find c where f'(c) = 0
+    crits = [c for c in sp.solve(df, x_sym)
+             if c.is_real and float(a) < float(c) < float(b)]
+
+    if abs(fa-fb) < 1e-9:
+        if crits:
+            rows = "<br>".join(
+                f"c = {float(c):.6f}: f'(c) = {float(sp.simplify(df.subs(x_sym,c))):.2e} ≈ 0 ✓"
+                for c in crits)
+            add(f"Point(s) c ∈ ({a}, {b}) where f'(c) = 0", rows, "sage")
+        else:
+            add("Finding c", "No symbolic solution found in the interval — try numerical methods.", "")
+
+    return {"steps": steps, "expr": expr, "df": df, "a": a, "b": b,
+            "fa": fa, "fb": fb, "crits": crits, "valid": abs(fa-fb)<1e-9}
+
+
+# ── LAGRANGE'S THEOREM (Mean Value Theorem) ───────────────────────────────────
+
+def solve_lagrange(expr_str, a, b):
+    steps = []
+    def add(l, bo, v=""): steps.append((l, bo, v))
+
+    try:
+        expr = sp.sympify(expr_str)
+        df   = sp.diff(expr, x_sym)
+        fa   = float(expr.subs(x_sym, a))
+        fb   = float(expr.subs(x_sym, b))
+    except Exception as e:
+        add("Error", str(e), "error"); return {"steps": steps}
+
+    slope = (fb - fa) / (b - a)
+
+    add("Lagrange's Theorem — the Mean Value Theorem",
+        """<strong>Hypotheses:</strong><br>
+1. f is <em>continuous</em> on [a, b]<br>
+2. f is <em>differentiable</em> on (a, b)<br><br>
+<strong>Conclusion:</strong> there exists at least one c ∈ (a, b) such that:<br><br>
+<span class="mf">f'(c) = [f(b) − f(a)] / (b − a)</span><br><br>
+<em>Intuition:</em> the instantaneous rate of change at c equals the average rate of change
+over [a, b]. Somewhere, the tangent line is parallel to the secant through (a, f(a)) and (b, f(b)).<br><br>
+Lagrange is the generalisation of Rolle: if f(a)=f(b), the secant is horizontal,
+and we recover Rolle's theorem.""",
+        "warm")
+
+    add("Average rate of change (slope of secant)",
+        f"[f({b})−f({a})] / ({b}−{a}) = [{fb:.4f}−{fa:.4f}] / {b-a:.4f} = <strong>{slope:.6f}</strong>")
+
+    # Find c where f'(c) = slope
+    eq     = sp.Eq(df, sp.Rational(slope).limit_denominator(10000))
+    c_sols = [c for c in sp.solve(df - slope, x_sym)
+              if c.is_real and float(a) < float(c) < float(b)]
+
+    if c_sols:
+        rows = "<br>".join(
+            f"c = {float(c):.6f}: f'(c) = {float(sp.simplify(df.subs(x_sym,c))):.6f} ≈ {slope:.6f} ✓"
+            for c in c_sols)
+        add(f"Point(s) c ∈ ({a}, {b}) where f'(c) = {slope:.4f}", rows, "sage")
+    else:
+        add("Finding c", f"f'(c) = {slope:.6f} — no exact symbolic solution in ({a},{b}). "
+            "Check numerically.", "")
+
+    return {"steps": steps, "expr": expr, "df": df, "a": a, "b": b,
+            "fa": fa, "fb": fb, "slope": slope, "c_sols": c_sols}
+
+
+# ── CAUCHY'S THEOREM ──────────────────────────────────────────────────────────
+
+def solve_cauchy(f_str, g_str, a, b):
+    steps = []
+    def add(l, bo, v=""): steps.append((l, bo, v))
+
+    try:
+        f_expr = sp.sympify(f_str)
+        g_expr = sp.sympify(g_str)
+        df     = sp.diff(f_expr, x_sym)
+        dg     = sp.diff(g_expr, x_sym)
+        fa     = float(f_expr.subs(x_sym, a)); fb = float(f_expr.subs(x_sym, b))
+        ga     = float(g_expr.subs(x_sym, a)); gb = float(g_expr.subs(x_sym, b))
+    except Exception as e:
+        add("Error", str(e), "error"); return {"steps": steps}
+
+    add("Cauchy's Theorem (Generalised MVT)",
+        """<strong>Hypotheses:</strong><br>
+1. f and g are <em>continuous</em> on [a, b]<br>
+2. f and g are <em>differentiable</em> on (a, b)<br>
+3. g'(x) ≠ 0 for all x ∈ (a, b)<br><br>
+<strong>Conclusion:</strong> there exists at least one c ∈ (a, b) such that:<br><br>
+<span class="mf">[f(b)−f(a)] / [g(b)−g(a)] = f'(c) / g'(c)</span><br><br>
+<em>Cauchy generalises Lagrange:</em> take g(x)=x and you recover the ordinary MVT.<br><br>
+<em>Key application:</em> Cauchy's theorem is the foundation of de L'Hôpital's rule.""",
+        "warm")
+
+    if abs(gb - ga) < 1e-12:
+        add("Error", "g(b)−g(a) = 0 — Cauchy's theorem requires this to be non-zero.", "error")
+        return {"steps": steps}
+
+    ratio = (fb - fa) / (gb - ga)
+    add("The ratio [f(b)−f(a)] / [g(b)−g(a)]",
+        f"f: [{fb:.4f}−{fa:.4f}] = {fb-fa:.4f}<br>"
+        f"g: [{gb:.4f}−{ga:.4f}] = {gb-ga:.4f}<br>"
+        f"Ratio = <strong>{ratio:.6f}</strong>")
+
+    # Find c where f'(c)/g'(c) = ratio
+    dg_zeros = sp.solve(dg, x_sym)
+    if any(float(a) < float(z) < float(b) for z in dg_zeros if z.is_real):
+        add("Warning", "g'(x)=0 inside the interval — hypothesis 3 may be violated.", "error")
+        return {"steps": steps}
+
+    c_sols = []
+    try:
+        eq_expr = df - ratio * dg
+        c_sols = [c for c in sp.solve(eq_expr, x_sym)
+                  if c.is_real and float(a) < float(c) < float(b)]
+    except Exception:
+        pass
+
+    if c_sols:
+        rows = "<br>".join(
+            f"c = {float(c):.6f}: f'(c)/g'(c) = "
+            f"{float(df.subs(x_sym,c)):.4f}/{float(dg.subs(x_sym,c)):.4f} = "
+            f"{float(df.subs(x_sym,c))/float(dg.subs(x_sym,c)):.6f} ≈ {ratio:.6f} ✓"
+            for c in c_sols)
+        add(f"Point c ∈ ({a}, {b}) where f'(c)/g'(c) = {ratio:.4f}", rows, "sage")
+    else:
+        add("Finding c", "No exact symbolic solution found in the interval.", "")
+
+    add("Connection to de L'Hôpital",
+        """Cauchy's theorem is exactly why L'Hôpital's rule works.<br><br>
+For a 0/0 indeterminate form: f(a)=g(a)=0.<br>
+By Cauchy: f(x)/g(x) = [f(x)−f(a)]/[g(x)−g(a)] = f'(c)/g'(c) for some c between a and x.<br>
+As x→a, c→a, so lim f(x)/g(x) = lim f'(c)/g'(c) = f'(a)/g'(a). □""",
+        "sage")
+
+    return {"steps": steps}
+
+
+# ── SHARED PLOT FOR ROLLE AND LAGRANGE ────────────────────────────────────────
+
+def plot_mean_value(r, kind):
+    expr=r["expr"]; df=r["df"]; a=r["a"]; b=r["b"]; fa=r["fa"]; fb=r["fb"]
+    f_n = sp.lambdify(x_sym, expr, "numpy")
+    margin = (b-a)*0.4
+    x_r = np.linspace(a-margin, b+margin, 500)
+    try:
+        y_r = np.array(f_n(x_r), dtype=float)
+        fig, ax = plt.subplots(figsize=(8,5)); fig.patch.set_facecolor("#fdfaf5")
+        ax.set_facecolor("#fdfaf5")
+        ax.spines[["top","right"]].set_visible(False)
+        ax.spines["bottom"].set_color("#e0d8cc"); ax.spines["left"].set_color("#e0d8cc")
+        ax.tick_params(colors="#4a4540",labelsize=8.5)
+        ax.grid(True,alpha=0.2,color="#e0d8cc")
+        ax.axhline(0,color="#1a1814",linewidth=0.6)
+
+        ax.plot(x_r, np.where(np.isfinite(y_r),y_r,np.nan),
+                color="#3d6b5e",linewidth=2.5,label=f"f(x)")
+
+        # secant line through (a,fa) and (b,fb)
+        slope = (fb-fa)/(b-a)
+        x_sec = np.linspace(a-margin*0.5, b+margin*0.5, 100)
+        y_sec = fa + slope*(x_sec-a)
+        ax.plot(x_sec, y_sec, color="#c8a96e", linewidth=1.8,
+                linestyle="--", label=f"Secant slope={slope:.3f}" if kind=="lagrange"
+                else f"Secant (horizontal)" )
+
+        ax.plot(a, fa, "o", color="#e8602a", markersize=10, zorder=5, label=f"({a}, {fa:.3f})")
+        ax.plot(b, fb, "o", color="#e8602a", markersize=10, zorder=5, label=f"({b}, {fb:.3f})")
+
+        # tangent at each c
+        crits = r.get("c_sols") or r.get("crits", [])
+        for c in crits:
+            cf   = float(c)
+            fc   = float(expr.subs(x_sym, cf))
+            dfc  = float(df.subs(x_sym, cf))
+            x_tan = np.linspace(cf-0.8, cf+0.8, 100)
+            y_tan = fc + dfc*(x_tan-cf)
+            ax.plot(x_tan, y_tan, color="#7b6fb0", linewidth=2,
+                    linestyle=":", alpha=0.9)
+            ax.plot(cf, fc, "s", color="#7b6fb0", markersize=10, zorder=5,
+                    label=f"c={cf:.3f} (tangent ∥ secant)")
+
+        y_fin=y_r[np.isfinite(y_r)]
+        if len(y_fin)>0: ax.set_ylim(np.percentile(y_fin,1),np.percentile(y_fin,99))
+        ax.legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
+        ax.set_xlabel("x",color="#4a4540",fontsize=9)
+        title = "Rolle's Theorem" if kind=="rolle" else "Lagrange's Theorem (MVT)"
+        ax.set_title(title,fontsize=10,color="#4a4540")
+        plt.tight_layout(); return fig
+    except: return None
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def render(n, name, subtitle, category):
@@ -419,7 +736,11 @@ def render(n, name, subtitle, category):
              "Basic derivatives",
              "Product rule","Quotient rule","Chain rule",
              "Differentiate a function",
+             "Second derivative & concavity",
              "Critical points (maxima/minima)",
+             "Rolle's theorem",
+             "Lagrange's theorem",
+             "Cauchy's theorem",
              "De L'Hôpital",
              "Linear approximation",
              "Physics: motion"],
@@ -428,6 +749,25 @@ def render(n, name, subtitle, category):
         if topic == "Differentiate a function":
             expr_s = st.text_input("f(x) =", value="x**3 - 3*x", key="drv_expr")
             x_v    = st.number_input("Evaluate f'(x) at x=", value=1.0, step=0.5, key="drv_xv")
+
+        elif topic == "Second derivative & concavity":
+            expr_s = st.text_input("f(x) =", value="x**4 - 4*x**2", key="drv_d2_expr")
+
+        elif topic == "Rolle's theorem":
+            expr_s = st.text_input("f(x) =", value="x**3 - x", key="drv_rolle_expr")
+            a_th   = st.number_input("a", value=-1.0, step=0.5, key="drv_rolle_a")
+            b_th   = st.number_input("b", value=1.0,  step=0.5, key="drv_rolle_b")
+
+        elif topic == "Lagrange's theorem":
+            expr_s = st.text_input("f(x) =", value="x**3", key="drv_lag_expr")
+            a_th   = st.number_input("a", value=0.0, step=0.5, key="drv_lag_a")
+            b_th   = st.number_input("b", value=2.0, step=0.5, key="drv_lag_b")
+
+        elif topic == "Cauchy's theorem":
+            expr_s  = st.text_input("f(x) =", value="x**2", key="drv_cau_f")
+            expr_s2 = st.text_input("g(x) =", value="x**3", key="drv_cau_g")
+            a_th    = st.number_input("a", value=1.0, step=0.5, key="drv_cau_a")
+            b_th    = st.number_input("b", value=3.0, step=0.5, key="drv_cau_b")
 
         elif topic == "Critical points (maxima/minima)":
             expr_s = st.text_input("f(x) =", value="x**3 - 3*x", key="drv_crit_expr")
@@ -481,6 +821,34 @@ def render(n, name, subtitle, category):
                     st.markdown('<div class="graph-label">Function and derivative</div>', unsafe_allow_html=True)
                     fig = plot_diff(r)
                     if fig: st.pyplot(fig); plt.close(fig)
+
+            elif topic == "Second derivative & concavity":
+                r = solve_second_deriv(expr_s)
+                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
+                if "expr" in r:
+                    st.markdown('<div class="graph-label">f, f\', f\'\'</div>', unsafe_allow_html=True)
+                    fig = plot_second_deriv(r)
+                    if fig: st.pyplot(fig); plt.close(fig)
+
+            elif topic == "Rolle's theorem":
+                r = solve_rolle(expr_s, a_th, b_th)
+                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
+                if "expr" in r:
+                    st.markdown('<div class="graph-label">Rolle visualisation</div>', unsafe_allow_html=True)
+                    fig = plot_mean_value(r, "rolle")
+                    if fig: st.pyplot(fig); plt.close(fig)
+
+            elif topic == "Lagrange's theorem":
+                r = solve_lagrange(expr_s, a_th, b_th)
+                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
+                if "expr" in r:
+                    st.markdown('<div class="graph-label">Lagrange visualisation</div>', unsafe_allow_html=True)
+                    fig = plot_mean_value(r, "lagrange")
+                    if fig: st.pyplot(fig); plt.close(fig)
+
+            elif topic == "Cauchy's theorem":
+                r = solve_cauchy(expr_s, expr_s2, a_th, b_th)
+                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
 
             elif topic == "Critical points (maxima/minima)":
                 r = solve_critical(expr_s)

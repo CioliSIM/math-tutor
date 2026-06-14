@@ -327,6 +327,120 @@ def render_steps(r):
             st.warning(f"Could not render graph: {e}")
 
 
+# ── Bolzano's theorem ─────────────────────────────────────────────────────────
+
+def analyze_bolzano(expr_str, a, b):
+    steps = []
+    def add(l, bo, v=""): steps.append((l, bo, v))
+
+    try:
+        expr = sp.sympify(expr_str)
+        fa   = float(expr.subs(x, a))
+        fb   = float(expr.subs(x, b))
+    except Exception as e:
+        add("Error", str(e), "error")
+        return {"steps": steps}
+
+    add("Bolzano's Theorem — the Intermediate Value Theorem for zeros",
+        """If f is <strong>continuous</strong> on [a, b] and
+<span class="mf">f(a) · f(b) &lt; 0</span>
+(the function has opposite signs at the endpoints),<br><br>
+then there exists at least one c ∈ (a, b) such that <strong>f(c) = 0</strong>.<br><br>
+<em>Intuition:</em> a continuous function cannot go from positive to negative (or vice versa)
+without crossing zero. It must pass through it.<br><br>
+The theorem guarantees <em>existence</em> — it does not give you the exact value of c.
+For that you need bisection or Newton's method.""",
+        "warm")
+
+    add(f"Step 1 — Evaluate at the endpoints",
+        f"f({a}) = <strong>{fa:.6f}</strong><br>"
+        f"f({b}) = <strong>{fb:.6f}</strong><br><br>"
+        f"Product: f(a)·f(b) = {fa*fb:.6f}")
+
+    if fa * fb < 0:
+        add("Step 2 — Bolzano's condition is satisfied",
+            f"f({a})·f({b}) = {fa*fb:.6f} &lt; 0 ✓<br><br>"
+            f"The signs are opposite → at least one zero exists in ({a}, {b}).<br>"
+            f"The function changes sign, so it <em>must</em> cross zero.", "sage")
+
+        # bisection to find approximate root
+        lo, hi = (a, b) if fa < 0 else (b, a)
+        fa2, fb2 = (fa, fb) if fa < 0 else (fb, fa)
+        lo, hi = min(a,b), max(a,b)
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            fmid = float(expr.subs(x, mid))
+            if fa * fmid < 0:
+                hi = mid
+            else:
+                lo = mid
+        add("Bisection method — approximate root",
+            f"Starting from [{a}, {b}], bisecting 40 times:<br>"
+            f"c ≈ <strong>{mid:.8f}</strong><br>"
+            f"f(c) ≈ {float(expr.subs(x, mid)):.2e} ≈ 0 ✓", "sage")
+    elif abs(fa) < 1e-10:
+        add("Step 2 — a is already a zero",
+            f"f({a}) = 0 exactly. The zero is at the endpoint.", "sage")
+    elif abs(fb) < 1e-10:
+        add("Step 2 — b is already a zero",
+            f"f({b}) = 0 exactly. The zero is at the endpoint.", "sage")
+    else:
+        add("Step 2 — Bolzano's condition is NOT satisfied",
+            f"f({a})·f({b}) = {fa*fb:.6f} &gt; 0<br><br>"
+            "Both values have the same sign. Bolzano's theorem does NOT apply here.<br>"
+            "This does <em>not</em> mean there is no zero — there could still be an even number of zeros.<br>"
+            "But the theorem cannot guarantee one.", "error")
+
+    return {"steps": steps}
+
+
+def plot_bolzano(expr_str, a, b):
+    try:
+        expr  = sp.sympify(expr_str)
+        f_num = sp.lambdify(x, expr, "numpy")
+        margin = (b - a) * 0.3
+        x_r = np.linspace(a - margin, b + margin, 500)
+        y_r = np.array(f_num(x_r), dtype=float)
+
+        fig, ax = plt.subplots(figsize=(7, 4))
+        fig.patch.set_facecolor("#fdfaf5"); ax.set_facecolor("#fdfaf5")
+        ax.spines[["top","right"]].set_visible(False)
+        ax.spines["bottom"].set_color("#e0d8cc"); ax.spines["left"].set_color("#e0d8cc")
+        ax.tick_params(colors="#4a4540", labelsize=8.5)
+        ax.grid(True, alpha=0.2, color="#e0d8cc")
+
+        ax.plot(x_r, np.where(np.isfinite(y_r), y_r, np.nan),
+                color="#3d6b5e", linewidth=2.5, label=f"f(x) = {expr}")
+        ax.axhline(0, color="#1a1814", linewidth=0.8)
+        ax.axvline(a, color="#b0a090", linewidth=1, linestyle=":")
+        ax.axvline(b, color="#b0a090", linewidth=1, linestyle=":")
+
+        fa = float(expr.subs(x, a))
+        fb = float(expr.subs(x, b))
+        ax.plot(a, fa, "o", color="#e8602a", markersize=10, zorder=5,
+                label=f"f({a}) = {fa:.3f}")
+        ax.plot(b, fb, "o", color="#7b6fb0", markersize=10, zorder=5,
+                label=f"f({b}) = {fb:.3f}")
+
+        if fa * fb < 0:
+            ax.fill_betweenx([-abs(fa)-abs(fb), abs(fa)+abs(fb)], a, b,
+                             alpha=0.08, color="#3d6b5e")
+
+        y_fin = y_r[np.isfinite(y_r)]
+        if len(y_fin) > 0:
+            pad = (y_fin.max() - y_fin.min()) * 0.15 + 0.3
+            ax.set_ylim(y_fin.min() - pad, y_fin.max() + pad)
+
+        ax.legend(fontsize=8.5, framealpha=0.7,
+                  facecolor="#fdfaf5", edgecolor="#e0d8cc")
+        ax.set_xlabel("x", color="#4a4540", fontsize=9)
+        ax.set_title("Bolzano's Theorem", fontsize=10, color="#4a4540")
+        plt.tight_layout()
+        return fig
+    except Exception:
+        return None
+
+
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def render(n, name, subtitle, category):
@@ -341,7 +455,7 @@ def render(n, name, subtitle, category):
 
         lim_type = st.selectbox(
             "Type",
-            ["At a point", "At infinity", "One-sided", "Notable limits"],
+            ["At a point", "At infinity", "One-sided", "Notable limits", "Bolzano's theorem"],
             key="lim_type",
         )
 
@@ -365,6 +479,12 @@ def render(n, name, subtitle, category):
             a_str    = ""
             preview  = "sin(x)/x · (1+1/x)^x · …"
 
+        if lim_type == "Bolzano's theorem":
+            expr_str = st.text_input("f(x) =", value="x**3 - x - 1", key="lim_bolz_expr")
+            a_bz = st.number_input("a", value=1.0, step=0.5, key="lim_bz_a")
+            b_bz = st.number_input("b", value=2.0, step=0.5, key="lim_bz_b")
+            preview = f"Bolzano on [{a_bz}, {b_bz}]"
+
         st.markdown(
             f'<div class="eq-display" style="font-size:0.95rem;">{preview}</div>',
             unsafe_allow_html=True,
@@ -381,7 +501,7 @@ def render(n, name, subtitle, category):
     At a point: <code>sin(x)/x</code>, a=0<br>
     At ∞: <code>(3x²+1)/(x²−2)</code><br>
     One-sided: <code>1/x</code>, a=0<br>
-    One-sided: <code>Abs(x)/x</code>, a=0
+    Bolzano: <code>x³−x−1</code>, [1, 2]
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -394,6 +514,13 @@ def render(n, name, subtitle, category):
                 render_steps(analyze_at_infinity(expr_str))
             elif lim_type == "One-sided":
                 render_steps(analyze_one_sided(expr_str, a_str))
+            elif lim_type == "Bolzano's theorem":
+                render_steps(analyze_bolzano(expr_str, a_bz, b_bz))
+                fig = plot_bolzano(expr_str, a_bz, b_bz)
+                if fig:
+                    st.markdown('<div class="graph-label">Bolzano visualisation</div>',
+                                unsafe_allow_html=True)
+                    st.pyplot(fig); plt.close(fig)
             else:
                 render_steps(analyze_notable())
         else:
