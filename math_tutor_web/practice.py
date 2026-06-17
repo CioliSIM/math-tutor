@@ -538,95 +538,6 @@ def questions_ch20():
         },
     ]
 
-
-QUESTION_BANKS = {
-    1:  questions_ch1,
-    2:  questions_ch2,
-    3:  questions_ch3,
-    4:  questions_ch4,
-    5:  questions_ch5,
-    6:  questions_ch6,
-    7:  questions_ch7,
-    8:  questions_ch8,
-    9:  questions_ch9,
-    10: questions_ch10,
-    11: questions_ch11,
-    12: questions_ch12,
-    13: questions_ch13,
-    14: questions_ch14,
-    15: questions_ch15,
-    16: questions_ch16,
-    17: questions_ch17,
-    18: questions_ch18,
-    19: questions_ch19,
-    20: questions_ch20,
-    21: questions_ch21,
-    22: questions_ch22,
-}
-
-
-# ── Practice section renderer ─────────────────────────────────────────────────
-
-def render_practice(chapter_n, dark=False):
-    """Render the practice section for a given chapter."""
-    if chapter_n not in QUESTION_BANKS:
-        return
-
-    ink  = "#e8e0d4" if dark else "#1a1814"
-    ink2 = "#9e9080" if dark else "#4a4540"
-    bdr  = "#2a2620" if dark else "#ddd5c8"
-    card = "#161410" if dark else "#ffffff"
-    warm = "#d4703a" if dark else "#c8602a"
-    sand = "#b89848" if dark else "#a8893e"
-
-    st.markdown(f"""
-<div style="margin-top:2rem;">
-  <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:1.5rem;">
-    <div style="width:6px;height:6px;border-radius:50%;background:{warm};flex-shrink:0;"></div>
-    <div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.2em;
-                text-transform:uppercase;color:{sand};">Practice</div>
-    <div style="flex:1;height:1px;background:{bdr};"></div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-    # Seed control
-    seed_key = f"prac_seed_{chapter_n}"
-    if seed_key not in st.session_state:
-        st.session_state[seed_key] = 42
-
-    questions = QUESTION_BANKS[chapter_n]()
-
-    # Show questions
-    for i, q in enumerate(questions):
-        with st.container():
-            st.markdown(f"""
-<div style="background:{card};border:1px solid {bdr};border-radius:8px;
-            padding:1.1rem 1.3rem;margin-bottom:1rem;">
-  <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.14em;
-              text-transform:uppercase;color:{sand};margin-bottom:0.6rem;">
-    Question {i+1}
-  </div>
-""", unsafe_allow_html=True)
-
-            if q["type"] == "multiple_choice":
-                multiple_choice(q["q"], q["options"], q["correct"],
-                                q.get("explanation",""))
-            elif q["type"] == "numeric":
-                numeric_question(q["q"], q["answer"],
-                                 explanation=q.get("explanation",""))
-            elif q["type"] == "symbolic":
-                symbolic_question(q["q"], q["answer"],
-                                  explanation=q.get("explanation",""))
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    # New set button
-    if st.button("New set of questions →", key=f"prac_new_{chapter_n}"):
-        st.session_state[seed_key] = random.randint(0, 9999)
-        st.rerun()
-
-
 def questions_ch3():
     """Systems of Equations."""
     return [
@@ -901,3 +812,91 @@ def questions_ch18():
             "explanation": "A plane in 3D: ax+by+cz=d where (a,b,c) is the normal vector.",
         },
     ]
+
+
+QUESTION_BANKS = {
+    1:  questions_ch1,
+    2:  questions_ch2,
+    3:  questions_ch3,
+    4:  questions_ch4,
+    5:  questions_ch5,
+    6:  questions_ch6,
+    7:  questions_ch7,
+    8:  questions_ch8,
+    9:  questions_ch9,
+    10: questions_ch10,
+    11: questions_ch11,
+    12: questions_ch12,
+    13: questions_ch13,
+    14: questions_ch14,
+    15: questions_ch15,
+    16: questions_ch16,
+    17: questions_ch17,
+    18: questions_ch18,
+    19: questions_ch19,
+    20: questions_ch20,
+    21: questions_ch21,
+    22: questions_ch22,
+}
+
+
+# ── Practice section renderer ─────────────────────────────────────────────────
+
+def render_practice(chapter_n, dark=False):
+    """Render the practice section for a given chapter."""
+    if chapter_n not in QUESTION_BANKS:
+        return
+
+    ink  = "#e8e0d4" if dark else "#1a1814"
+    ink2 = "#9e9080" if dark else "#4a4540"
+    bdr  = "#2a2620" if dark else "#ddd5c8"
+    card = "#161410" if dark else "#ffffff"
+    warm = "#d4703a" if dark else "#c8602a"
+    sand = "#b89848" if dark else "#a8893e"
+
+    st.markdown(f"""
+<div style="margin-top:2rem;">
+  <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:1.5rem;">
+    <div style="width:6px;height:6px;border-radius:50%;background:{warm};flex-shrink:0;"></div>
+    <div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.2em;
+                text-transform:uppercase;color:{sand};">Practice</div>
+    <div style="flex:1;height:1px;background:{bdr};"></div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    # Seed control
+    seed_key = f"prac_seed_{chapter_n}"
+    if seed_key not in st.session_state:
+        st.session_state[seed_key] = 42
+
+    questions = QUESTION_BANKS[chapter_n]()
+
+    # Show questions
+    for i, q in enumerate(questions):
+        with st.container():
+            st.markdown(f"""
+<div style="background:{card};border:1px solid {bdr};border-radius:8px;
+            padding:1.1rem 1.3rem;margin-bottom:1rem;">
+  <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.14em;
+              text-transform:uppercase;color:{sand};margin-bottom:0.6rem;">
+    Question {i+1}
+  </div>
+""", unsafe_allow_html=True)
+
+            if q["type"] == "multiple_choice":
+                multiple_choice(q["q"], q["options"], q["correct"],
+                                q.get("explanation",""))
+            elif q["type"] == "numeric":
+                numeric_question(q["q"], q["answer"],
+                                 explanation=q.get("explanation",""))
+            elif q["type"] == "symbolic":
+                symbolic_question(q["q"], q["answer"],
+                                  explanation=q.get("explanation",""))
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # New set button
+    if st.button("New set of questions →", key=f"prac_new_{chapter_n}"):
+        st.session_state[seed_key] = random.randint(0, 9999)
+        st.rerun()
