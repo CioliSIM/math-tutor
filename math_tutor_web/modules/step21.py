@@ -1,877 +1,518 @@
-import math
+import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 import sympy as sp
 import streamlit as st
-
 import style
 
-x_sym = sp.Symbol('x')
+x = sp.Symbol('x')
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Palette helper ────────────────────────────────────────────────────────────
+def _pal(dark):
+    return {
+        "bg":   "#0f0e0c" if dark else "#f9f6f0",
+        "bg2":  "#181510" if dark else "#f2ede4",
+        "ink":  "#e8e0d4" if dark else "#1a1814",
+        "ink2": "#9e9080" if dark else "#4a4540",
+        "warm": "#d4703a" if dark else "#c8602a",
+        "sage": "#4a8070" if dark else "#2d5a4e",
+        "sand": "#b89848" if dark else "#a8893e",
+        "bdr":  "#2a2620" if dark else "#ddd5c8",
+        "card": "#161410" if dark else "#ffffff",
+    }
 
-def styled_ax(ax, fig):
-    fig.patch.set_facecolor("#fdfaf5"); ax.set_facecolor("#fdfaf5")
+def _ax(ax, fig, p):
+    fig.patch.set_facecolor(p["bg"])
+    ax.set_facecolor(p["bg"])
     ax.spines[["top","right"]].set_visible(False)
-    ax.spines["bottom"].set_color("#e0d8cc"); ax.spines["left"].set_color("#e0d8cc")
-    ax.tick_params(colors="#4a4540", labelsize=8.5)
-    ax.grid(True, alpha=0.2, color="#e0d8cc")
-    ax.axhline(0, color="#1a1814", linewidth=0.6)
-    ax.axvline(0, color="#1a1814", linewidth=0.6)
-
-
-# ── INTUITION ─────────────────────────────────────────────────────────────────
-
-def solve_intuition():
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    add("From average to instantaneous speed",
-        """A car travels 120 km in 2 hours → average speed = 60 km/h.<br><br>
-Now harder: what is the speed at <em>exactly</em> 1:37pm?<br>
-That instantaneous rate of change is the <strong>derivative</strong>.<br><br>
-<strong>The construction:</strong><br>
-Average speed on [t, t+h] = [f(t+h)−f(t)]/h<br>
-As h→0: average → instantaneous → <span class='mf'>f'(t) = lim(h→0) [f(t+h)−f(t)]/h</span>""",
-        "warm")
-
-    add("Geometric picture",
-        """Draw a curve y=f(x).<br>
-Draw a line through (x, f(x)) and (x+h, f(x+h)) — that's the <strong>secant</strong>.<br>
-Slope of secant = [f(x+h)−f(x)]/h<br><br>
-As h→0, the second point slides into the first.<br>
-The secant → <strong>tangent line</strong>.<br>
-Slope of tangent = <strong>the derivative</strong>.<br><br>
-f'(x) = slope of the tangent to the curve at x.<br>
-Large f' → steep curve. f'=0 → horizontal tangent → candidate max/min.""")
-
-    # numerical illustration for f(x)=x²
-    add("Watching h shrink for f(x)=x² at x=1",
-        "f'(1) = lim(h→0) [(1+h)²−1]/h = lim(h→0) [2+h] = 2<br><br>"
-        + "<br>".join(
-            f"h={10**(-k):g}: average rate = {((1+10**(-k))**2-1)/10**(-k):.8f}"
-            for k in range(0,7)
-        ), "sage")
-
-    add("Formal definition",
-        """<span class='mf'>f'(x) = lim(h→0) [f(x+h)−f(x)] / h</span><br><br>
-<strong>Notations</strong> (all mean the same):<br>
-f'(x) · df/dx · ẋ (Newton, time derivatives)<br><br>
-<strong>When does f'(x) NOT exist?</strong><br>
-· Corner: f(x)=|x| at x=0 — left slope −1, right slope +1, they disagree<br>
-· Vertical tangent: slope=∞ (not a real number)<br>
-· Discontinuity: differentiable → continuous (not vice versa)""")
-
-    return {"steps": steps}
-
-
-def plot_secant_tangent():
-    fig, axes = plt.subplots(1, 3, figsize=(12,4)); fig.patch.set_facecolor("#fdfaf5")
-    x_r = np.linspace(-0.5, 3, 300); y_r = x_r**2
-    for ax, h in zip(axes, [2, 0.5, 0.01]):
-        styled_ax(ax, fig); ax.set_aspect("auto")
-        ax.plot(x_r, y_r, color="#3d6b5e", linewidth=2.2, label="f(x)=x²")
-        x0,y0 = 1,1; x1,y1 = 1+h,(1+h)**2
-        slope_sec = (y1-y0)/h
-        xs = np.linspace(0.3, min(x1+0.3,3), 100)
-        ax.plot(xs, y0+slope_sec*(xs-x0), color="#e8602a", linewidth=2,
-                linestyle="--", label=f"Secant h={h} slope={slope_sec:.2f}")
-        xt = np.linspace(0.3,1.7,100)
-        ax.plot(xt, y0+2*(xt-x0), color="#c8a96e", linewidth=1.5,
-                linestyle=":", label="Tangent slope=2")
-        ax.plot(x0,y0,"o",color="#1a1814",markersize=8)
-        ax.plot(x1,y1,"o",color="#e8602a",markersize=7)
-        ax.set_xlim(-0.3,3); ax.set_ylim(-0.5,6)
-        ax.set_title(f"h={h}",fontsize=10,color="#4a4540")
-        ax.legend(fontsize=7.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-        ax.set_xlabel("x",color="#4a4540",fontsize=9)
-    plt.tight_layout(); return fig
-
-
-# ── RULES ─────────────────────────────────────────────────────────────────────
-
-RULES_TABLE = [
-    ("CONSTANT", "f(x)=c", "f'(x)=0", "A constant never changes."),
-    ("POWER RULE", "f(x)=xⁿ", "f'(x)=n·xⁿ⁻¹", "Bring exponent down, reduce by 1. Works for any real n."),
-    ("NATURAL EXP", "f(x)=eˣ", "f'(x)=eˣ", "eˣ is its own derivative — the defining property of e."),
-    ("EXPONENTIAL", "f(x)=aˣ", "f'(x)=aˣ·ln(a)", "When a=e: ln(e)=1, reduces to eˣ."),
-    ("NATURAL LOG", "f(x)=ln(x)", "f'(x)=1/x", "Valid for x>0. Reciprocal."),
-    ("SINE", "f(x)=sin(x)", "f'(x)=cos(x)", "At peak of sin: slope=0=cos(π/2). ✓"),
-    ("COSINE", "f(x)=cos(x)", "f'(x)=−sin(x)", "Minus sign: cos decreasing when sin positive."),
-    ("TAN", "f(x)=tan(x)", "f'(x)=1/cos²(x)", "Derived from quotient rule on sin/cos."),
-]
-
-def solve_rules(rule_name):
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    if rule_name == "Basic derivatives":
-        add("The building blocks",
-            "Every other derivative is assembled from these. Learn them by heart.",
-            "warm")
-        for name, f, df, note in RULES_TABLE:
-            add(name, f"<span class='mf'>{f} → {df}</span><br>{note}")
-        add("A beautiful cycle",
-            "sin'=cos · cos'=−sin · (−sin)'=−cos · (−cos)'=sin<br>"
-            "The 4th derivative of sin is sin again — a cycle of period 4.", "sage")
-
-    elif rule_name == "Product rule":
-        add("Product rule",
-            "<span class='mf'>(f·g)' = f'·g + f·g'</span><br><br>"
-            "WRONG instinct: f'·g'. Check: (x·x)'=(x²)'=2x, but x'·x'=1≠2x.<br><br>"
-            "Geometric intuition: area = f·g. When x grows by dx:<br>"
-            "f grows by f'·dx, g grows by g'·dx → area grows by f'·dx·g + f·g'·dx.<br>"
-            "Rate = f'g + fg'.", "warm")
-        examples = [
-            ("x**2*sin(x)", "f=x², g=sinx → 2x·sinx+x²·cosx"),
-            ("exp(x)*cos(x)", "f=eˣ, g=cosx → eˣ·cosx−eˣ·sinx = eˣ(cosx−sinx)"),
-            ("x*log(x)", "f=x, g=lnx → lnx+x·(1/x) = lnx+1"),
-        ]
-        for f_str, expl in examples:
-            expr = sp.sympify(f_str)
-            d = sp.simplify(sp.diff(expr, x_sym))
-            add(f"Example: {f_str}", f"{expl}<br>Sympy confirms: {d}")
-
-    elif rule_name == "Quotient rule":
-        add("Quotient rule",
-            "<span class='mf'>(f/g)' = (f'·g − f·g') / g²</span><br><br>"
-            "Memory: 'low d-high minus high d-low, over low squared'<br>"
-            "<strong>Order matters</strong> in the numerator — getting it backwards is the most common error.", "warm")
-        examples = [
-            ("sin(x)/x", "(cosx·x − sinx·1)/x² = (x·cosx−sinx)/x²"),
-            ("(x**2+1)/(x-1)", "(2x(x−1)−(x²+1))/(x−1)² = (x²−2x−1)/(x−1)²"),
-            ("exp(x)/x", "(eˣ·x−eˣ)/x² = eˣ(x−1)/x²"),
-        ]
-        for f_str, expl in examples:
-            expr = sp.sympify(f_str)
-            d = sp.simplify(sp.diff(expr, x_sym))
-            add(f"Example: {f_str}", f"{expl}<br>Sympy: {d}")
-        add("Deriving (tanx)' from scratch",
-            "tanx = sinx/cosx<br>(tanx)' = (cosx·cosx − sinx·(−sinx))/cos²x = (cos²x+sin²x)/cos²x = 1/cos²x ✓", "sage")
-
-    elif rule_name == "Chain rule":
-        add("Chain rule — the most important",
-            "<span class='mf'>(f(g(x)))' = f'(g(x)) · g'(x)</span><br><br>"
-            "In Leibniz: dy/dx = dy/du · du/dx — the du cancels like a fraction.<br><br>"
-            "Intuition — gears: if gear A turns 3× as fast as your hand,<br>"
-            "and gear B turns 2× as fast as gear A → gear B turns 6× as fast.<br>"
-            "Rates of change multiply.", "warm")
-        examples = [
-            ("sin(x**2)", "outer=sin(u), inner=x² → cos(x²)·2x = 2x·cos(x²)"),
-            ("exp(3*x)", "outer=eᵘ, inner=3x → e^(3x)·3 = 3e^(3x)"),
-            ("(x**2+1)**10", "outer=u^10, inner=x²+1 → 10(x²+1)⁹·2x = 20x(x²+1)⁹"),
-            ("log(sin(x))", "outer=ln(u), inner=sinx → (1/sinx)·cosx = cotx"),
-        ]
-        for f_str, expl in examples:
-            expr = sp.sympify(f_str)
-            d = sp.simplify(sp.diff(expr, x_sym))
-            add(f"Example: {f_str}", f"{expl}<br>Sympy: {d}")
-        add("How to spot the chain rule",
-            "Ask: is there a function INSIDE another?<br>"
-            "sin(x²) → YES → chain rule.<br>"
-            "sin(x)·x² → NO → product rule.", "sage")
-
-    return {"steps": steps}
-
-
-# ── APPLICATIONS ──────────────────────────────────────────────────────────────
-
-def solve_diff(expr_str, x_val):
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    try:
-        expr  = sp.sympify(expr_str)
-        deriv = sp.simplify(sp.diff(expr, x_sym))
-        deriv2 = sp.simplify(sp.diff(deriv, x_sym))
-        val   = float(deriv.subs(x_sym, x_val))
-
-        add("Differentiation", f"f(x) = {expr}<br>f'(x) = <strong>{deriv}</strong><br>f''(x) = <strong>{deriv2}</strong>")
-        add(f"Evaluate at x={x_val}", f"f'({x_val}) = <strong>{val:.6f}</strong><br>This is the slope of the tangent to f at x={x_val}.", "sage")
-        return {"steps":steps,"expr":expr,"deriv":deriv,"x_val":x_val,"val":val}
-    except Exception as e:
-        add("Error", str(e), "error")
-        return {"steps":steps}
-
-
-def solve_critical(expr_str):
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    try:
-        expr   = sp.sympify(expr_str)
-        deriv  = sp.diff(expr, x_sym)
-        deriv2 = sp.diff(deriv, x_sym)
-        crits  = [c for c in sp.solve(deriv, x_sym) if c.is_real]
-
-        add("Critical points — where f'(x)=0",
-            "At a maximum or minimum the tangent is horizontal → slope=0 → derivative=0.<br><br>"
-            f"f(x) = {expr}<br>f'(x) = {sp.simplify(deriv)}<br>f''(x) = {sp.simplify(deriv2)}", "warm")
-        add(f"Critical points", f"{crits}")
-
-        for cp in crits:
-            fv  = sp.simplify(expr.subs(x_sym,cp))
-            f2v = sp.simplify(deriv2.subs(x_sym,cp))
-            if f2v.is_real:
-                verdict = "LOCAL MINIMUM ∪" if f2v>0 else "LOCAL MAXIMUM ∩" if f2v<0 else "Inconclusive"
-            else:
-                verdict = "Check manually"
-            add(f"x={cp}: f({cp})={fv}", f"f''({cp})={f2v} → {verdict}", "sage" if "MIN" in verdict or "MAX" in verdict else "")
-
-        return {"steps":steps,"expr":expr,"deriv":deriv,"deriv2":deriv2,"crits":crits}
-    except Exception as e:
-        add("Error", str(e), "error")
-        return {"steps":steps}
-
-
-def solve_lhopital(expr_str, point_str):
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    add("De L'Hôpital's Rule",
-        """If lim f(x)=0 and lim g(x)=0 (or both →∞):<br>
-<span class='mf'>lim f(x)/g(x) = lim f'(x)/g'(x)</span><br><br>
-Near x=a: f(x)≈f'(a)(x−a), g(x)≈g'(a)(x−a) → ratio→f'(a)/g'(a).""", "warm")
-
-    try:
-        expr = sp.sympify(expr_str)
-        if point_str == "inf":
-            point = sp.oo
-        elif point_str == "-inf":
-            point = -sp.oo
-        else:
-            point = sp.sympify(point_str)
-        result = sp.limit(expr, x_sym, point)
-        add(f"lim(x→{point_str}) {expr_str}", f"= <strong>{result}</strong>", "sage")
-        return {"steps":steps}
-    except Exception as e:
-        add("Error", str(e), "error")
-        return {"steps":steps}
-
-
-def solve_approx(expr_str, a_val):
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    add("Linear approximation",
-        f"Near x=a: <span class='mf'>f(x) ≈ f(a) + f'(a)·(x−a)</span><br><br>"
-        "This is just the tangent line equation.<br>"
-        "Works well when x is close to a. Fails for large distances.", "warm")
-
-    try:
-        expr  = sp.sympify(expr_str)
-        deriv = sp.diff(expr, x_sym)
-        fa    = float(expr.subs(x_sym, a_val))
-        dfa   = float(deriv.subs(x_sym, a_val))
-        add("Your function",
-            f"f(x) = {expr}<br>f({a_val}) = {fa:.6f}<br>f'({a_val}) = {dfa:.6f}<br><br>"
-            f"Approximation: f(x) ≈ {fa:.4f} + {dfa:.4f}·(x−{a_val})", "sage")
-
-        rows = ""
-        for delta in [0.1, 0.5, 1.0, 2.0]:
-            for sign in [+1, -1]:
-                xv = a_val + sign*delta
-                exact = float(expr.subs(x_sym, xv))
-                approx = fa + dfa*(xv-a_val)
-                err = abs(exact-approx)
-                rows += f"x={xv}: exact={exact:.4f}, approx={approx:.4f}, error={err:.2e}<br>"
-        add("Accuracy at various x", rows)
-        return {"steps":steps,"expr":expr,"deriv":deriv,"a_val":a_val}
-    except Exception as e:
-        add("Error", str(e), "error")
-        return {"steps":steps}
-
-
-def solve_motion(expr_str):
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    t = sp.Symbol('t')
-    add("Velocity and acceleration",
-        """<span class='mf'>v(t) = s'(t) &nbsp;&nbsp; a(t) = v'(t) = s''(t)</span><br><br>
-Newton invented calculus in the 1660s to describe planetary motion.<br>
-F=ma is about the <em>second</em> derivative of position.""", "warm")
-
-    try:
-        s = sp.sympify(expr_str.replace('x','t'))
-        v = sp.diff(s, t)
-        a = sp.diff(v, t)
-        add("Motion equations",
-            f"s(t) = {s}<br>v(t) = {sp.simplify(v)}<br>a(t) = {sp.simplify(a)}")
-        cv = [c for c in sp.solve(v,t) if c.is_real]
-        if cv:
-            lines = "<br>".join(f"t={c}: s={sp.simplify(s.subs(t,c))}" for c in cv)
-            add("v=0 (momentarily at rest)", lines, "sage")
-        return {"steps":steps,"s":s,"v":v,"a":a,"t":t}
-    except Exception as e:
-        add("Error",str(e),"error")
-        return {"steps":steps}
-
-
-# ── Plots ─────────────────────────────────────────────────────────────────────
-
-def plot_diff(r):
-    expr=r["expr"]; deriv=r["deriv"]; x_val=r["x_val"]; m=r["val"]
-    f_n = sp.lambdify(x_sym, expr, "numpy")
-    d_n = sp.lambdify(x_sym, deriv, "numpy")
-    x_r = np.linspace(x_val-3, x_val+3, 500)
-    try:
-        y_f = np.array(f_n(x_r), dtype=float)
-        y_d = np.array(d_n(x_r), dtype=float)
-        y0  = float(expr.subs(x_sym, x_val))
-        fig, axes = plt.subplots(1,2,figsize=(10,4)); fig.patch.set_facecolor("#fdfaf5")
-        for ax in axes: styled_ax(ax, fig)
-        axes[0].plot(x_r, np.where(np.isfinite(y_f), y_f, np.nan),
-                     color="#3d6b5e", linewidth=2.2, label=f"f(x)")
-        tan = y0 + m*(x_r-x_val)
-        axes[0].plot(x_r, tan, color="#e8602a", linewidth=1.8,
-                     linestyle="--", label=f"Tangent slope={m:.3f}")
-        axes[0].plot(x_val, y0, "o", color="#e8602a", markersize=9, zorder=5)
-        y_fin = y_f[np.isfinite(y_f)]
-        if len(y_fin)>0: axes[0].set_ylim(np.percentile(y_fin,2),np.percentile(y_fin,98))
-        axes[0].legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-        axes[0].set_title("Function and tangent",fontsize=10,color="#4a4540")
-        axes[0].set_xlabel("x",color="#4a4540",fontsize=9)
-        axes[1].plot(x_r, np.where(np.isfinite(y_d), y_d, np.nan),
-                     color="#c8a96e", linewidth=2.2, label="f'(x)")
-        axes[1].axvline(x_val,color="#e8602a",linewidth=1.5,linestyle="--",alpha=0.7)
-        axes[1].plot(x_val, m, "o", color="#e8602a", markersize=9, zorder=5)
-        y_df = y_d[np.isfinite(y_d)]
-        if len(y_df)>0: axes[1].set_ylim(np.percentile(y_df,2),np.percentile(y_df,98))
-        axes[1].legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-        axes[1].set_title("Derivative",fontsize=10,color="#4a4540")
-        axes[1].set_xlabel("x",color="#4a4540",fontsize=9)
-        plt.tight_layout(); return fig
-    except: return None
-
-
-def plot_critical(r):
-    expr=r["expr"]; deriv=r["deriv"]; deriv2=r["deriv2"]; crits=r["crits"]
-    if not crits: return None
-    cx = float(sum(crits)/len(crits))
-    x_r = np.linspace(cx-4, cx+4, 500)
-    f_n = sp.lambdify(x_sym, expr, "numpy")
-    d_n = sp.lambdify(x_sym, deriv, "numpy")
-    try:
-        y_f = np.array(f_n(x_r), dtype=float)
-        y_d = np.array(d_n(x_r), dtype=float)
-        fig, axes = plt.subplots(1,2,figsize=(10,4)); fig.patch.set_facecolor("#fdfaf5")
-        for ax in axes: styled_ax(ax, fig)
-        axes[0].plot(x_r, np.where(np.isfinite(y_f),y_f,np.nan), color="#3d6b5e", linewidth=2.2)
-        for cp in crits:
-            cpf=float(expr.subs(x_sym,cp)); cpd2=float(deriv2.subs(x_sym,cp))
-            col="#e8602a" if cpd2<0 else "#3d6b5e" if cpd2>0 else "#c8a96e"
-            lbl="max" if cpd2<0 else "min" if cpd2>0 else "?"
-            axes[0].plot(float(cp),cpf,"o",color=col,markersize=11,zorder=5,label=f"x={float(cp):.2f} ({lbl})")
-        y_fin=y_f[np.isfinite(y_f)]
-        if len(y_fin)>0: axes[0].set_ylim(np.percentile(y_fin,2),np.percentile(y_fin,98))
-        axes[0].legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-        axes[0].set_title("Function with critical points",fontsize=10,color="#4a4540")
-        axes[0].set_xlabel("x",color="#4a4540",fontsize=9)
-        axes[1].plot(x_r, np.where(np.isfinite(y_d),y_d,np.nan), color="#c8a96e", linewidth=2.2, label="f'(x)")
-        axes[1].axhline(0,color="#1a1814",linewidth=1.5,linestyle="--",alpha=0.7,label="f'=0")
-        for cp in crits:
-            axes[1].axvline(float(cp),color="#e8602a",linewidth=1.5,linestyle=":",alpha=0.7)
-            axes[1].plot(float(cp),0,"o",color="#e8602a",markersize=9,zorder=5)
-        y_df=y_d[np.isfinite(y_d)]
-        if len(y_df)>0: axes[1].set_ylim(np.percentile(y_df,2),np.percentile(y_df,98))
-        axes[1].legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-        axes[1].set_title("Derivative — zeros are critical points",fontsize=10,color="#4a4540")
-        axes[1].set_xlabel("x",color="#4a4540",fontsize=9)
-        plt.tight_layout(); return fig
-    except: return None
-
-
-def plot_motion_fig(r):
-    s=r["s"]; v=r["v"]; a=r["a"]; t=r["t"]
-    t_r = np.linspace(0,6,400)
-    try:
-        s_n=sp.lambdify(t,s,"numpy"); v_n=sp.lambdify(t,v,"numpy"); a_n=sp.lambdify(t,a,"numpy")
-        ys=np.array(s_n(t_r),dtype=float); yv=np.array(v_n(t_r),dtype=float); ya=np.array(a_n(t_r),dtype=float)
-        fig,axes=plt.subplots(1,3,figsize=(12,4)); fig.patch.set_facecolor("#fdfaf5")
-        for ax,y,lab,col in zip(axes,[ys,yv,ya],["s(t) position","v(t) velocity","a(t) acceleration"],
-                                 ["#3d6b5e","#e8602a","#c8a96e"]):
-            styled_ax(ax,fig)
-            ax.plot(t_r,np.where(np.isfinite(y),y,np.nan),color=col,linewidth=2.2,label=lab)
-            ax.legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-            ax.set_xlabel("t",color="#4a4540",fontsize=9)
-            y_fin=y[np.isfinite(y)]
-            if len(y_fin)>0: ax.set_ylim(np.percentile(y_fin,1),np.percentile(y_fin,99))
-        plt.tight_layout(); return fig
-    except: return None
-
-
-# ── SECOND DERIVATIVE & CONCAVITY ────────────────────────────────────────────
-
-def solve_second_deriv(expr_str):
-    steps = []
-    def add(l, b, v=""): steps.append((l, b, v))
-
-    try:
-        expr   = sp.sympify(expr_str)
-        df     = sp.diff(expr, x_sym)
-        d2f    = sp.diff(df, x_sym)
-        df_s   = sp.simplify(df)
-        d2f_s  = sp.simplify(d2f)
-    except Exception as e:
-        add("Error", str(e), "error"); return {"steps": steps}
-
-    add("The second derivative",
-        """f''(x) is the derivative of f'(x) — the rate of change of the slope.<br><br>
-<strong>f''(x) &gt; 0</strong> → slope is increasing → curve bends <strong>upward ∪</strong> (concave up)<br>
-<strong>f''(x) &lt; 0</strong> → slope is decreasing → curve bends <strong>downward ∩</strong> (concave down)<br>
-<strong>f''(x) = 0</strong> → candidate <strong>inflection point</strong> (concavity may change)<br><br>
-Second derivative test for critical points:<br>
-f'(c)=0 and f''(c)&gt;0 → <strong>local minimum</strong> ∪<br>
-f'(c)=0 and f''(c)&lt;0 → <strong>local maximum</strong> ∩<br>
-f'(c)=0 and f''(c)=0 → <strong>inconclusive</strong> (use first derivative test)""",
-        "warm")
-
-    add("Derivatives",
-        f"f(x) = {expr}<br>f'(x) = {df_s}<br>f''(x) = <strong>{d2f_s}</strong>")
-
-    # inflection points
-    infl_raw = sp.solve(d2f, x_sym)
-    infl     = [c for c in infl_raw if c.is_real]
-    if infl:
-        rows = ""
-        for c in infl:
-            fv = sp.simplify(expr.subs(x_sym, c))
-            rows += f"x={float(c):.4f}: f({float(c):.4f})={fv} — verify sign change of f'' around this point<br>"
-        add("Candidate inflection points (f''=0)", rows)
-
-    # critical points with second derivative test
-    crits = [c for c in sp.solve(df, x_sym) if c.is_real]
-    if crits:
-        rows = ""
-        for c in crits:
-            fv  = sp.simplify(expr.subs(x_sym, c))
-            d2v = sp.simplify(d2f.subs(x_sym, c))
-            if d2v.is_real:
-                if d2v > 0:   verdict = "LOCAL MINIMUM ∪"
-                elif d2v < 0: verdict = "LOCAL MAXIMUM ∩"
-                else:         verdict = "Inconclusive — use first derivative test"
-            else:
-                verdict = "Check manually"
-            rows += f"x={float(c):.4f}: f={fv}, f''={sp.simplify(d2v)} → {verdict}<br>"
-        add("Critical points — second derivative test", rows, "sage")
-
-    return {"steps": steps, "expr": expr, "df": df, "d2f": d2f}
-
-
-def plot_second_deriv(r):
-    expr=r["expr"]; df=r["df"]; d2f=r["d2f"]
-    f_n  = sp.lambdify(x_sym, expr, "numpy")
-    df_n = sp.lambdify(x_sym, df,   "numpy")
-    d2_n = sp.lambdify(x_sym, d2f,  "numpy")
-    x_r  = np.linspace(-3, 3, 500)
-    try:
-        yf  = np.array(f_n(x_r),  dtype=float)
-        ydf = np.array(df_n(x_r), dtype=float)
-        yd2 = np.array(d2_n(x_r), dtype=float)
-        fig, axes = plt.subplots(1,3,figsize=(12,4)); fig.patch.set_facecolor("#fdfaf5")
-        colors = ["#3d6b5e","#e8602a","#c8a96e"]
-        labels = ["f(x)","f'(x)","f''(x)"]
-        for ax,y,col,lbl in zip(axes,[yf,ydf,yd2],colors,labels):
-            ax.set_facecolor("#fdfaf5")
-            ax.spines[["top","right"]].set_visible(False)
-            ax.spines["bottom"].set_color("#e0d8cc"); ax.spines["left"].set_color("#e0d8cc")
-            ax.tick_params(colors="#4a4540",labelsize=8.5)
-            ax.grid(True,alpha=0.2,color="#e0d8cc")
-            ax.axhline(0,color="#1a1814",linewidth=0.6)
-            ax.plot(x_r,np.where(np.isfinite(y),y,np.nan),color=col,linewidth=2.2,label=lbl)
-            if lbl in ["f'(x)","f''(x)"]:
-                ax.fill_between(x_r,np.where(np.isfinite(y),y,0),0,
-                                where=np.isfinite(y)&(y>0),alpha=0.15,color=col)
-                ax.fill_between(x_r,np.where(np.isfinite(y),y,0),0,
-                                where=np.isfinite(y)&(y<0),alpha=0.15,color="#e8602a")
-            y_fin=y[np.isfinite(y)]
-            if len(y_fin)>0: ax.set_ylim(np.percentile(y_fin,2),np.percentile(y_fin,98))
-            ax.legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-            ax.set_xlabel("x",color="#4a4540",fontsize=9)
-        plt.tight_layout(); return fig
-    except: return None
-
-
-# ── ROLLE'S THEOREM ───────────────────────────────────────────────────────────
-
-def solve_rolle(expr_str, a, b):
-    steps = []
-    def add(l, bo, v=""): steps.append((l, bo, v))
-
-    try:
-        expr = sp.sympify(expr_str)
-        df   = sp.diff(expr, x_sym)
-        fa   = float(expr.subs(x_sym, a))
-        fb   = float(expr.subs(x_sym, b))
-    except Exception as e:
-        add("Error", str(e), "error"); return {"steps": steps}
-
-    add("Rolle's Theorem",
-        """<strong>Hypotheses:</strong><br>
-1. f is <em>continuous</em> on [a, b]<br>
-2. f is <em>differentiable</em> on (a, b)<br>
-3. <span class="mf">f(a) = f(b)</span><br><br>
-<strong>Conclusion:</strong> there exists at least one c ∈ (a, b) such that
-<span class="mf">f'(c) = 0</span><br><br>
-<em>Intuition:</em> if a function starts and ends at the same height,
-it must have at least one horizontal tangent somewhere in between.
-It cannot go up and come back without turning around.<br><br>
-Rolle's Theorem is the special case of Lagrange's Theorem when f(a)=f(b).""",
-        "warm")
-
-    add(f"Check hypothesis 3: f(a) = f(b)?",
-        f"f({a}) = {fa:.6f}<br>f({b}) = {fb:.6f}<br><br>"
-        + ("f(a) = f(b) ✓ — hypothesis satisfied." if abs(fa-fb)<1e-9
-           else f"f(a) ≠ f(b) (difference = {abs(fa-fb):.4f}) — Rolle's theorem does NOT apply.<br>"
-                "There may still be points where f'=0, but the theorem doesn't guarantee it."),
-        "sage" if abs(fa-fb)<1e-9 else "error")
-
-    # Find c where f'(c) = 0
-    crits = [c for c in sp.solve(df, x_sym)
-             if c.is_real and float(a) < float(c) < float(b)]
-
-    if abs(fa-fb) < 1e-9:
-        if crits:
-            rows = "<br>".join(
-                f"c = {float(c):.6f}: f'(c) = {float(sp.simplify(df.subs(x_sym,c))):.2e} ≈ 0 ✓"
-                for c in crits)
-            add(f"Point(s) c ∈ ({a}, {b}) where f'(c) = 0", rows, "sage")
-        else:
-            add("Finding c", "No symbolic solution found in the interval — try numerical methods.", "")
-
-    return {"steps": steps, "expr": expr, "df": df, "a": a, "b": b,
-            "fa": fa, "fb": fb, "crits": crits, "valid": abs(fa-fb)<1e-9}
-
-
-# ── LAGRANGE'S THEOREM (Mean Value Theorem) ───────────────────────────────────
-
-def solve_lagrange(expr_str, a, b):
-    steps = []
-    def add(l, bo, v=""): steps.append((l, bo, v))
-
-    try:
-        expr = sp.sympify(expr_str)
-        df   = sp.diff(expr, x_sym)
-        fa   = float(expr.subs(x_sym, a))
-        fb   = float(expr.subs(x_sym, b))
-    except Exception as e:
-        add("Error", str(e), "error"); return {"steps": steps}
-
-    slope = (fb - fa) / (b - a)
-
-    add("Lagrange's Theorem — the Mean Value Theorem",
-        """<strong>Hypotheses:</strong><br>
-1. f is <em>continuous</em> on [a, b]<br>
-2. f is <em>differentiable</em> on (a, b)<br><br>
-<strong>Conclusion:</strong> there exists at least one c ∈ (a, b) such that:<br><br>
-<span class="mf">f'(c) = [f(b) − f(a)] / (b − a)</span><br><br>
-<em>Intuition:</em> the instantaneous rate of change at c equals the average rate of change
-over [a, b]. Somewhere, the tangent line is parallel to the secant through (a, f(a)) and (b, f(b)).<br><br>
-Lagrange is the generalisation of Rolle: if f(a)=f(b), the secant is horizontal,
-and we recover Rolle's theorem.""",
-        "warm")
-
-    add("Average rate of change (slope of secant)",
-        f"[f({b})−f({a})] / ({b}−{a}) = [{fb:.4f}−{fa:.4f}] / {b-a:.4f} = <strong>{slope:.6f}</strong>")
-
-    # Find c where f'(c) = slope
-    eq     = sp.Eq(df, sp.Rational(slope).limit_denominator(10000))
-    c_sols = [c for c in sp.solve(df - slope, x_sym)
-              if c.is_real and float(a) < float(c) < float(b)]
-
-    if c_sols:
-        rows = "<br>".join(
-            f"c = {float(c):.6f}: f'(c) = {float(sp.simplify(df.subs(x_sym,c))):.6f} ≈ {slope:.6f} ✓"
-            for c in c_sols)
-        add(f"Point(s) c ∈ ({a}, {b}) where f'(c) = {slope:.4f}", rows, "sage")
-    else:
-        add("Finding c", f"f'(c) = {slope:.6f} — no exact symbolic solution in ({a},{b}). "
-            "Check numerically.", "")
-
-    return {"steps": steps, "expr": expr, "df": df, "a": a, "b": b,
-            "fa": fa, "fb": fb, "slope": slope, "c_sols": c_sols}
-
-
-# ── CAUCHY'S THEOREM ──────────────────────────────────────────────────────────
-
-def solve_cauchy(f_str, g_str, a, b):
-    steps = []
-    def add(l, bo, v=""): steps.append((l, bo, v))
-
-    try:
-        f_expr = sp.sympify(f_str)
-        g_expr = sp.sympify(g_str)
-        df     = sp.diff(f_expr, x_sym)
-        dg     = sp.diff(g_expr, x_sym)
-        fa     = float(f_expr.subs(x_sym, a)); fb = float(f_expr.subs(x_sym, b))
-        ga     = float(g_expr.subs(x_sym, a)); gb = float(g_expr.subs(x_sym, b))
-    except Exception as e:
-        add("Error", str(e), "error"); return {"steps": steps}
-
-    add("Cauchy's Theorem (Generalised MVT)",
-        """<strong>Hypotheses:</strong><br>
-1. f and g are <em>continuous</em> on [a, b]<br>
-2. f and g are <em>differentiable</em> on (a, b)<br>
-3. g'(x) ≠ 0 for all x ∈ (a, b)<br><br>
-<strong>Conclusion:</strong> there exists at least one c ∈ (a, b) such that:<br><br>
-<span class="mf">[f(b)−f(a)] / [g(b)−g(a)] = f'(c) / g'(c)</span><br><br>
-<em>Cauchy generalises Lagrange:</em> take g(x)=x and you recover the ordinary MVT.<br><br>
-<em>Key application:</em> Cauchy's theorem is the foundation of de L'Hôpital's rule.""",
-        "warm")
-
-    if abs(gb - ga) < 1e-12:
-        add("Error", "g(b)−g(a) = 0 — Cauchy's theorem requires this to be non-zero.", "error")
-        return {"steps": steps}
-
-    ratio = (fb - fa) / (gb - ga)
-    add("The ratio [f(b)−f(a)] / [g(b)−g(a)]",
-        f"f: [{fb:.4f}−{fa:.4f}] = {fb-fa:.4f}<br>"
-        f"g: [{gb:.4f}−{ga:.4f}] = {gb-ga:.4f}<br>"
-        f"Ratio = <strong>{ratio:.6f}</strong>")
-
-    # Find c where f'(c)/g'(c) = ratio
-    dg_zeros = sp.solve(dg, x_sym)
-    if any(float(a) < float(z) < float(b) for z in dg_zeros if z.is_real):
-        add("Warning", "g'(x)=0 inside the interval — hypothesis 3 may be violated.", "error")
-        return {"steps": steps}
-
-    c_sols = []
-    try:
-        eq_expr = df - ratio * dg
-        c_sols = [c for c in sp.solve(eq_expr, x_sym)
-                  if c.is_real and float(a) < float(c) < float(b)]
-    except Exception:
-        pass
-
-    if c_sols:
-        rows = "<br>".join(
-            f"c = {float(c):.6f}: f'(c)/g'(c) = "
-            f"{float(df.subs(x_sym,c)):.4f}/{float(dg.subs(x_sym,c)):.4f} = "
-            f"{float(df.subs(x_sym,c))/float(dg.subs(x_sym,c)):.6f} ≈ {ratio:.6f} ✓"
-            for c in c_sols)
-        add(f"Point c ∈ ({a}, {b}) where f'(c)/g'(c) = {ratio:.4f}", rows, "sage")
-    else:
-        add("Finding c", "No exact symbolic solution found in the interval.", "")
-
-    add("Connection to de L'Hôpital",
-        """Cauchy's theorem is exactly why L'Hôpital's rule works.<br><br>
-For a 0/0 indeterminate form: f(a)=g(a)=0.<br>
-By Cauchy: f(x)/g(x) = [f(x)−f(a)]/[g(x)−g(a)] = f'(c)/g'(c) for some c between a and x.<br>
-As x→a, c→a, so lim f(x)/g(x) = lim f'(c)/g'(c) = f'(a)/g'(a). □""",
-        "sage")
-
-    return {"steps": steps}
-
-
-# ── SHARED PLOT FOR ROLLE AND LAGRANGE ────────────────────────────────────────
-
-def plot_mean_value(r, kind):
-    expr=r["expr"]; df=r["df"]; a=r["a"]; b=r["b"]; fa=r["fa"]; fb=r["fb"]
-    f_n = sp.lambdify(x_sym, expr, "numpy")
-    margin = (b-a)*0.4
-    x_r = np.linspace(a-margin, b+margin, 500)
-    try:
-        y_r = np.array(f_n(x_r), dtype=float)
-        fig, ax = plt.subplots(figsize=(8,5)); fig.patch.set_facecolor("#fdfaf5")
-        ax.set_facecolor("#fdfaf5")
-        ax.spines[["top","right"]].set_visible(False)
-        ax.spines["bottom"].set_color("#e0d8cc"); ax.spines["left"].set_color("#e0d8cc")
-        ax.tick_params(colors="#4a4540",labelsize=8.5)
-        ax.grid(True,alpha=0.2,color="#e0d8cc")
-        ax.axhline(0,color="#1a1814",linewidth=0.6)
-
-        ax.plot(x_r, np.where(np.isfinite(y_r),y_r,np.nan),
-                color="#3d6b5e",linewidth=2.5,label=f"f(x)")
-
-        # secant line through (a,fa) and (b,fb)
-        slope = (fb-fa)/(b-a)
-        x_sec = np.linspace(a-margin*0.5, b+margin*0.5, 100)
-        y_sec = fa + slope*(x_sec-a)
-        ax.plot(x_sec, y_sec, color="#c8a96e", linewidth=1.8,
-                linestyle="--", label=f"Secant slope={slope:.3f}" if kind=="lagrange"
-                else f"Secant (horizontal)" )
-
-        ax.plot(a, fa, "o", color="#e8602a", markersize=10, zorder=5, label=f"({a}, {fa:.3f})")
-        ax.plot(b, fb, "o", color="#e8602a", markersize=10, zorder=5, label=f"({b}, {fb:.3f})")
-
-        # tangent at each c
-        crits = r.get("c_sols") or r.get("crits", [])
-        for c in crits:
-            cf   = float(c)
-            fc   = float(expr.subs(x_sym, cf))
-            dfc  = float(df.subs(x_sym, cf))
-            x_tan = np.linspace(cf-0.8, cf+0.8, 100)
-            y_tan = fc + dfc*(x_tan-cf)
-            ax.plot(x_tan, y_tan, color="#7b6fb0", linewidth=2,
-                    linestyle=":", alpha=0.9)
-            ax.plot(cf, fc, "s", color="#7b6fb0", markersize=10, zorder=5,
-                    label=f"c={cf:.3f} (tangent ∥ secant)")
-
-        y_fin=y_r[np.isfinite(y_r)]
-        if len(y_fin)>0: ax.set_ylim(np.percentile(y_fin,1),np.percentile(y_fin,99))
-        ax.legend(fontsize=8.5,framealpha=0.7,facecolor="#fdfaf5",edgecolor="#e0d8cc")
-        ax.set_xlabel("x",color="#4a4540",fontsize=9)
-        title = "Rolle's Theorem" if kind=="rolle" else "Lagrange's Theorem (MVT)"
-        ax.set_title(title,fontsize=10,color="#4a4540")
-        plt.tight_layout(); return fig
-    except: return None
-
-
-# ── Public entry point ────────────────────────────────────────────────────────
-
-def render(n, name, subtitle, category):
-    style.module_header(category, n, name, subtitle)
-
-    left, right = st.columns([1, 1.75], gap="large")
-
-    with left:
-        st.markdown('<div class="input-panel">', unsafe_allow_html=True)
-        st.markdown('<div class="input-panel-label">Choose topic</div>', unsafe_allow_html=True)
-
-        topic = st.selectbox("Topic",
-            ["Intuition & Definition",
-             "Basic derivatives",
-             "Product rule","Quotient rule","Chain rule",
-             "Differentiate a function",
-             "Second derivative & concavity",
-             "Critical points (maxima/minima)",
-             "Rolle's theorem",
-             "Lagrange's theorem",
-             "Cauchy's theorem",
-             "De L'Hôpital",
-             "Linear approximation",
-             "Physics: motion"],
-            key="drv_topic")
-
-        if topic == "Differentiate a function":
-            expr_s = st.text_input("f(x) =", value="x**3 - 3*x", key="drv_expr")
-            x_v    = st.number_input("Evaluate f'(x) at x=", value=1.0, step=0.5, key="drv_xv")
-
-        elif topic == "Second derivative & concavity":
-            expr_s = st.text_input("f(x) =", value="x**4 - 4*x**2", key="drv_d2_expr")
-
-        elif topic == "Rolle's theorem":
-            expr_s = st.text_input("f(x) =", value="x**3 - x", key="drv_rolle_expr")
-            a_th   = st.number_input("a", value=-1.0, step=0.5, key="drv_rolle_a")
-            b_th   = st.number_input("b", value=1.0,  step=0.5, key="drv_rolle_b")
-
-        elif topic == "Lagrange's theorem":
-            expr_s = st.text_input("f(x) =", value="x**3", key="drv_lag_expr")
-            a_th   = st.number_input("a", value=0.0, step=0.5, key="drv_lag_a")
-            b_th   = st.number_input("b", value=2.0, step=0.5, key="drv_lag_b")
-
-        elif topic == "Cauchy's theorem":
-            expr_s  = st.text_input("f(x) =", value="x**2", key="drv_cau_f")
-            expr_s2 = st.text_input("g(x) =", value="x**3", key="drv_cau_g")
-            a_th    = st.number_input("a", value=1.0, step=0.5, key="drv_cau_a")
-            b_th    = st.number_input("b", value=3.0, step=0.5, key="drv_cau_b")
-
-        elif topic == "Critical points (maxima/minima)":
-            expr_s = st.text_input("f(x) =", value="x**3 - 3*x", key="drv_crit_expr")
-
-        elif topic == "De L'Hôpital":
-            expr_s = st.text_input("f(x)/g(x) =", value="sin(x)/x", key="drv_lhop")
-            pt_s   = st.text_input("x→ (0, inf, -inf, or number)", value="0", key="drv_pt")
-
-        elif topic == "Linear approximation":
-            expr_s = st.text_input("f(x) =", value="sqrt(x)", key="drv_approx_expr")
-            a_v    = st.number_input("Expand near x=a=", value=4.0, step=0.5, key="drv_av")
-
-        elif topic == "Physics: motion":
-            expr_s = st.text_input("s(t) =", value="t**3 - 6*t", key="drv_mot")
-
-        solve_btn = st.button("Compute →", key="drv_solve")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("""
-<div class="hint-panel">
-  <div class="hint-label">Try these</div>
-  <div class="hint-body">
-    Diff: <code>x**3-3*x</code> at x=2<br>
-    Diff: <code>sin(x)*exp(x)</code><br>
-    Critical: <code>x**4-4*x**2</code><br>
-    L'Hôpital: <code>sin(x)/x</code> x→0<br>
-    L'Hôpital: <code>(exp(x)-1)/x</code> x→0<br>
-    Motion: <code>t**3-6*t</code>
+    ax.spines["bottom"].set_color(p["bdr"])
+    ax.spines["left"].set_color(p["bdr"])
+    ax.tick_params(colors=p["ink2"], labelsize=8.5)
+    ax.grid(True, alpha=0.15, color=p["bdr"])
+    ax.axhline(0, color=p["ink2"], linewidth=0.5, alpha=0.5)
+
+# ── Section: hook ─────────────────────────────────────────────────────────────
+def section_hook(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:2.5rem;">
+  <p style="font-family:'Fraunces',serif;font-size:1.45rem;font-weight:400;
+            color:{p['ink']};line-height:1.55;margin:0 0 1.2rem;">
+    In 1666, Isaac Newton was 23 years old and hiding from the plague.<br>
+    Cambridge was closed. He had nothing to do but think.<br>
+    What he thought changed physics forever.
+  </p>
+  <p style="font-size:1rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 1rem;">
+    The question he was obsessed with: planets move. Their speed changes constantly.
+    How fast is a planet moving at <em>this exact moment</em> — not on average,
+    not approximately, but right now, at this precise instant?
+  </p>
+  <p style="font-size:1rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0;">
+    Average speed is easy — distance divided by time.
+    But instantaneous speed? That's dividing by zero.
+    And yet the tachometer in your car shows it. It's real.
+    How do you compute something that involves dividing by zero?
+  </p>
+</div>
+<div style="width:48px;height:2px;background:{p['warm']};margin-bottom:2.5rem;"></div>
+""", unsafe_allow_html=True)
+
+# ── Section: from average to instantaneous ────────────────────────────────────
+def section_average_to_instant(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.5rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 1rem;">The speedometer problem.</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    Say your position at time t is f(t) = t² metres.
+    Average speed over the interval [1, 1+h] is:
+  </p>
+  <div style="font-family:'Fraunces',serif;font-size:1.15rem;color:{p['ink']};
+              background:{p['bg2']};border-radius:8px;padding:0.9rem 1.2rem;
+              margin-bottom:1rem;border-left:3px solid {p['warm']};">
+    [f(1+h) − f(1)] / h &nbsp;=&nbsp; [(1+h)² − 1] / h &nbsp;=&nbsp; 2 + h
+  </div>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 1.2rem;">
+    Watch what happens as h gets smaller and smaller:
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # Live table
+    rows = ""
+    for exp in [0, -1, -2, -3, -4, -6]:
+        h    = 10**exp
+        rate = 2 + h
+        rows += f"""
+<tr>
+  <td style="font-family:'DM Mono',monospace;padding:0.4rem 1rem;color:{p['sand']};">{h:g}</td>
+  <td style="font-family:'DM Mono',monospace;padding:0.4rem 1rem;color:{p['ink2']};">{rate:.8f}</td>
+  <td style="padding:0.4rem 1rem;color:{''+p['sage'] if exp<=-4 else p['ink2']};font-size:0.85rem;">
+    {"→ converges to <strong>2</strong>" if exp<=-4 else ""}
+  </td>
+</tr>"""
+
+    st.markdown(f"""
+<div style="max-width:500px;margin-bottom:2rem;">
+  <table style="border-collapse:collapse;width:100%;">
+    <thead>
+      <tr style="border-bottom:1px solid {p['bdr']};">
+        <th style="font-family:'DM Mono',monospace;font-size:0.55rem;letter-spacing:0.15em;
+                   text-transform:uppercase;color:{p['sand']};padding:0.4rem 1rem;text-align:left;">h</th>
+        <th style="font-family:'DM Mono',monospace;font-size:0.55rem;letter-spacing:0.15em;
+                   text-transform:uppercase;color:{p['sand']};padding:0.4rem 1rem;text-align:left;">average speed</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>
+<div style="max-width:680px;margin-bottom:2.5rem;">
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    As h→0, the average speed approaches <strong style="color:{p['ink']};">exactly 2</strong>.
+    That limiting value is the <strong style="color:{p['warm']};">derivative</strong> of f at t=1.
+    Written f'(1) = 2.
+  </p>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0;">
+    This is not an approximation. It's an exact limit — the slope of the curve
+    at a single point, computed by approaching that point from both sides
+    until the answer stabilises.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Section: geometric picture ────────────────────────────────────────────────
+def section_geometry(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.2rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 1rem;">The geometric picture.</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.8rem;">
+    Draw the curve y=x². Draw a line through two points on the curve —
+    that's the <em>secant</em>. Its slope is the average rate of change.
+    As the two points get closer, the secant approaches the
+    <strong style="color:{p['warm']};">tangent line</strong> at that point.
+    The slope of the tangent is the derivative.
+  </p>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 1.2rem;">
+    In one sentence: <strong style="color:{p['ink']};">the derivative at a point is the slope of the 
+    tangent to the curve at that point.</strong>
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # Plot: three secants converging to tangent
+    fig, axes = plt.subplots(1, 3, figsize=(11, 4))
+    fig.patch.set_facecolor(p["bg"])
+    xr = np.linspace(-0.2, 2.5, 300)
+
+    for ax, h in zip(axes, [1.5, 0.5, 0.05]):
+        _ax(ax, fig, p)
+        ax.plot(xr, xr**2, color=p["sage"], linewidth=2.5, label="y = x²")
+        x0, y0 = 1.0, 1.0
+        x1, y1 = 1+h, (1+h)**2
+        slope   = (y1-y0)/h
+        xs = np.linspace(0.2, 1+h+0.2, 100)
+        ax.plot(xs, y0+slope*(xs-x0), color=p["warm"], linewidth=2,
+                linestyle="--", label=f"Secant (h={h})\nslope={slope:.2f}")
+        xt = np.linspace(0.3, 1.7, 100)
+        ax.plot(xt, y0+2*(xt-x0), color=p["sand"], linewidth=1.5,
+                linestyle=":", alpha=0.8, label="Tangent (slope=2)")
+        ax.plot(x0, y0, "o", color=p["ink"], markersize=8, zorder=5)
+        ax.plot(x1, y1, "o", color=p["warm"], markersize=7, zorder=5)
+        ax.set_xlim(-0.1, 2.5); ax.set_ylim(-0.3, 5)
+        ax.set_title(f"h = {h}", fontsize=10, color=p["ink2"])
+        ax.legend(fontsize=7.5, framealpha=0.8,
+                  facecolor=p["bg2"], edgecolor=p["bdr"], loc="upper left")
+        ax.set_xlabel("x", color=p["ink2"], fontsize=9)
+
+    fig.suptitle("As h→0, the secant becomes the tangent",
+                 fontsize=11, color=p["ink2"])
+    plt.tight_layout()
+    st.pyplot(fig); plt.close(fig)
+
+    st.markdown(f"""
+<div style="max-width:680px;margin:1.2rem 0 2.5rem;">
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0;">
+    Watch the third panel — h=0.05. The secant and tangent are almost identical.
+    At h=0 exactly, they coincide. That's the moment the derivative is born.
+  </p>
+</div>
+<div style="width:48px;height:2px;background:{p['warm']};margin-bottom:2.5rem;"></div>
+""", unsafe_allow_html=True)
+
+# ── Section: the definition ───────────────────────────────────────────────────
+def section_definition(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.5rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 1rem;">The formal definition.</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 1rem;">
+    Now that the idea is clear, the formula is just a precise way to write it:
+  </p>
+  <div style="font-family:'Fraunces',serif;font-size:1.3rem;color:{p['ink']};
+              background:{p['bg2']};border-radius:8px;padding:1rem 1.4rem;
+              margin-bottom:1.2rem;border-left:3px solid {p['warm']};line-height:1.8;">
+    f'(x) = lim<sub>h→0</sub> [f(x+h) − f(x)] / h
+  </div>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    Other notations — all mean exactly the same thing:
+  </p>
+  <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.2rem;">
+    <div style="background:{p['bg2']};border:1px solid {p['bdr']};border-radius:8px;
+                padding:0.7rem 1.1rem;text-align:center;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;color:{p['ink']};">f'(x)</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.55rem;color:{p['sand']};
+                  margin-top:0.2rem;letter-spacing:0.1em;text-transform:uppercase;">Lagrange</div>
+    </div>
+    <div style="background:{p['bg2']};border:1px solid {p['bdr']};border-radius:8px;
+                padding:0.7rem 1.1rem;text-align:center;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;color:{p['ink']};">df/dx</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.55rem;color:{p['sand']};
+                  margin-top:0.2rem;letter-spacing:0.1em;text-transform:uppercase;">Leibniz</div>
+    </div>
+    <div style="background:{p['bg2']};border:1px solid {p['bdr']};border-radius:8px;
+                padding:0.7rem 1.1rem;text-align:center;">
+      <div style="font-family:'Fraunces',serif;font-size:1.1rem;color:{p['ink']};">ẋ</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.55rem;color:{p['sand']};
+                  margin-top:0.2rem;letter-spacing:0.1em;text-transform:uppercase;">Newton</div>
+    </div>
+  </div>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 2.5rem;">
+    Newton and Leibniz invented calculus independently in the 1660s-70s.
+    They had a bitter dispute over priority that divided mathematics for decades.
+    Today we use Leibniz's notation — it turns out to be more powerful,
+    especially when working with functions of multiple variables.
+  </p>
+</div>
+<div style="width:48px;height:2px;background:{p['warm']};margin-bottom:2.5rem;"></div>
+""", unsafe_allow_html=True)
+
+# ── Section: rules ────────────────────────────────────────────────────────────
+def section_rules(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.5rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 1rem;">The rules — discovered, not invented.</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 1.2rem;">
+    Computing derivatives from the limit definition every time would take forever.
+    Mathematicians derived general rules that work for any function.
+    Each rule has a reason — not just a formula to memorize.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    rules = [
+        ("Power rule", "xⁿ → n·xⁿ⁻¹",
+         "Bring the exponent down, reduce by 1. Works for any real n — positive, negative, fractional. x²→2x, x³→3x², √x→1/(2√x)."),
+        ("The miracle of eˣ", "eˣ → eˣ",
+         "eˣ is its own derivative. The only function that grows at exactly the rate it currently has. This is not a coincidence — it's the defining property of e."),
+        ("Product rule", "(f·g)' = f'g + fg'",
+         "Think of area: f and g are sides of a rectangle. When both grow, the area grows by f'·g + f·g'. The tiny corner f'·g'·(dx)² vanishes."),
+        ("Chain rule", "(f(g(x)))' = f'(g(x))·g'(x)",
+         "Like gears: if gear A turns 3× as fast as your hand, and B turns 2× as fast as A, then B turns 6× as fast. Rates multiply."),
+        ("sin and cos", "sin x → cos x → −sin x → −cos x → sin x",
+         "A cycle of period 4. sin is its own fourth derivative. This is why oscillations — pendulums, waves, springs — all involve sin and cos."),
+    ]
+
+    for title, formula, note in rules:
+        st.markdown(f"""
+<div style="background:{p['card']};border:1px solid {p['bdr']};border-left:3px solid {p['warm']};
+            border-radius:0 10px 10px 0;padding:1.1rem 1.4rem;margin-bottom:0.9rem;">
+  <div style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.14em;
+              text-transform:uppercase;color:{p['sand']};margin-bottom:0.4rem;">{title}</div>
+  <div style="font-family:'Fraunces',serif;font-size:1.1rem;color:{p['ink']};
+              margin-bottom:0.5rem;">{formula}</div>
+  <div style="font-size:0.85rem;font-weight:300;color:{p['ink2']};line-height:1.7;">{note}</div>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown(f'<div style="width:48px;height:2px;background:{p["warm"]};margin:2rem 0 2.5rem;"></div>',
+                unsafe_allow_html=True)
+
+# ── Section: interactive differentiation ─────────────────────────────────────
+def section_interactive(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.2rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 0.8rem;">Try it.</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 1rem;">
+    Enter any function and see its derivative — along with the tangent at any point.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    col1, col2 = st.columns([3, 2])
+    with col1:
+        expr_str = st.text_input("f(x) =", value="x**3 - 3*x",
+                                  key="d21_expr", label_visibility="visible")
+    with col2:
+        x_val = st.number_input("Evaluate at x =", value=1.0, step=0.5,
+                                 key="d21_xval", label_visibility="visible")
+
+    if expr_str.strip():
+        try:
+            expr   = sp.sympify(expr_str)
+            deriv  = sp.simplify(sp.diff(expr, x))
+            deriv2 = sp.simplify(sp.diff(deriv, x))
+            val    = float(deriv.subs(x, x_val))
+            f_val  = float(expr.subs(x, x_val))
+
+            st.markdown(f"""
+<div style="display:flex;gap:0;background:{p['ink']};border-radius:10px;
+            overflow:hidden;margin:0.8rem 0 1.2rem;">
+  <div style="flex:1;padding:0.9rem 1.2rem;border-right:1px solid rgba(255,255,255,0.06);">
+    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.14em;
+                text-transform:uppercase;color:{p['sand']};margin-bottom:0.3rem;">f'(x)</div>
+    <div style="font-family:'Fraunces',serif;font-size:1.1rem;color:{p['bg']};line-height:1.2;">{deriv}</div>
+  </div>
+  <div style="flex:1;padding:0.9rem 1.2rem;border-right:1px solid rgba(255,255,255,0.06);">
+    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.14em;
+                text-transform:uppercase;color:{p['sand']};margin-bottom:0.3rem;">f''(x)</div>
+    <div style="font-family:'Fraunces',serif;font-size:1.1rem;color:{p['bg']};line-height:1.2;">{deriv2}</div>
+  </div>
+  <div style="flex:1;padding:0.9rem 1.2rem;">
+    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.14em;
+                text-transform:uppercase;color:{p['sand']};margin-bottom:0.3rem;">slope at x={x_val}</div>
+    <div style="font-family:'Fraunces',serif;font-size:1.1rem;color:{p['bg']};line-height:1.2;">{val:.4f}</div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-    with right:
-        if solve_btn:
-            if topic == "Intuition & Definition":
-                r = solve_intuition()
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
-                st.markdown('<div class="graph-label">Secant → tangent</div>', unsafe_allow_html=True)
-                fig = plot_secant_tangent(); st.pyplot(fig); plt.close(fig)
+            # Plot
+            f_n  = sp.lambdify(x, expr,  "numpy")
+            df_n = sp.lambdify(x, deriv, "numpy")
+            x_r  = np.linspace(x_val-3, x_val+3, 400)
+            y_f  = np.array(f_n(x_r),  dtype=float)
+            y_df = np.array(df_n(x_r), dtype=float)
 
-            elif topic in ["Basic derivatives","Product rule","Quotient rule","Chain rule"]:
-                r = solve_rules(topic)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+            fig.patch.set_facecolor(p["bg"])
+            for ax in [ax1, ax2]: _ax(ax, fig, p)
 
-            elif topic == "Differentiate a function":
-                r = solve_diff(expr_s, x_v)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
-                if "expr" in r:
-                    style.result_band(("f'(x)",str(sp.simplify(r["deriv"]))),
-                                      (f"f'({x_v})",f"{r['val']:.6f}"))
-                    st.markdown('<div class="graph-label">Function and derivative</div>', unsafe_allow_html=True)
-                    fig = plot_diff(r)
-                    if fig: st.pyplot(fig); plt.close(fig)
+            ax1.plot(x_r, np.where(np.isfinite(y_f),y_f,np.nan),
+                     color=p["sage"], linewidth=2.5, label="f(x)")
+            tan = f_val + val*(x_r-x_val)
+            ax1.plot(x_r, tan, color=p["warm"], linewidth=1.8,
+                     linestyle="--", label=f"Tangent at x={x_val}")
+            ax1.plot(x_val, f_val, "o", color=p["warm"], markersize=9, zorder=5)
+            y_fin = y_f[np.isfinite(y_f)]
+            if len(y_fin): ax1.set_ylim(np.percentile(y_fin,2), np.percentile(y_fin,98))
+            ax1.legend(fontsize=8.5, framealpha=0.8,
+                       facecolor=p["bg2"], edgecolor=p["bdr"])
+            ax1.set_xlabel("x", color=p["ink2"], fontsize=9)
+            ax1.set_title("Function and tangent", fontsize=10, color=p["ink2"])
 
-            elif topic == "Second derivative & concavity":
-                r = solve_second_deriv(expr_s)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
-                if "expr" in r:
-                    st.markdown('<div class="graph-label">f, f\', f\'\'</div>', unsafe_allow_html=True)
-                    fig = plot_second_deriv(r)
-                    if fig: st.pyplot(fig); plt.close(fig)
+            ax2.plot(x_r, np.where(np.isfinite(y_df),y_df,np.nan),
+                     color=p["sand"], linewidth=2.5, label="f'(x)")
+            ax2.axvline(x_val, color=p["warm"], linewidth=1.5,
+                        linestyle="--", alpha=0.7)
+            ax2.plot(x_val, val, "o", color=p["warm"], markersize=9, zorder=5,
+                     label=f"f'({x_val}) = {val:.3f}")
+            y_df_fin = y_df[np.isfinite(y_df)]
+            if len(y_df_fin): ax2.set_ylim(np.percentile(y_df_fin,2), np.percentile(y_df_fin,98))
+            ax2.legend(fontsize=8.5, framealpha=0.8,
+                       facecolor=p["bg2"], edgecolor=p["bdr"])
+            ax2.set_xlabel("x", color=p["ink2"], fontsize=9)
+            ax2.set_title("Derivative", fontsize=10, color=p["ink2"])
 
-            elif topic == "Rolle's theorem":
-                r = solve_rolle(expr_s, a_th, b_th)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
-                if "expr" in r:
-                    st.markdown('<div class="graph-label">Rolle visualisation</div>', unsafe_allow_html=True)
-                    fig = plot_mean_value(r, "rolle")
-                    if fig: st.pyplot(fig); plt.close(fig)
+            plt.tight_layout()
+            st.pyplot(fig); plt.close(fig)
 
-            elif topic == "Lagrange's theorem":
-                r = solve_lagrange(expr_s, a_th, b_th)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
-                if "expr" in r:
-                    st.markdown('<div class="graph-label">Lagrange visualisation</div>', unsafe_allow_html=True)
-                    fig = plot_mean_value(r, "lagrange")
-                    if fig: st.pyplot(fig); plt.close(fig)
+        except Exception as e:
+            st.markdown(f'<div style="font-size:0.82rem;color:{p["warm"]};margin-top:0.5rem;">Could not compute: {e}</div>',
+                        unsafe_allow_html=True)
 
-            elif topic == "Cauchy's theorem":
-                r = solve_cauchy(expr_s, expr_s2, a_th, b_th)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
+    st.markdown(f'<div style="width:48px;height:2px;background:{p["warm"]};margin:2rem 0 2.5rem;"></div>',
+                unsafe_allow_html=True)
 
-            elif topic == "Critical points (maxima/minima)":
-                r = solve_critical(expr_s)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
-                if "crits" in r and r["crits"]:
-                    st.markdown('<div class="graph-label">Critical points</div>', unsafe_allow_html=True)
-                    fig = plot_critical(r)
-                    if fig: st.pyplot(fig); plt.close(fig)
+# ── Section: critical points ──────────────────────────────────────────────────
+def section_critical(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.5rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 1rem;">Where does the function turn?</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    At a maximum or minimum, the tangent is horizontal — slope zero.
+    So f'(x)=0 at every local extremum. These are the <em>critical points</em>.
+  </p>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    The second derivative tells you which kind: f''&gt;0 means the curve bends upward ∪ (minimum), 
+    f''&lt;0 means it bends downward ∩ (maximum).
+    Think of it as: is the slope increasing or decreasing?
+  </p>
+</div>
+""", unsafe_allow_html=True)
 
-            elif topic == "De L'Hôpital":
-                r = solve_lhopital(expr_s, pt_s)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
+    expr_str = st.text_input("Analyze f(x) =", value="x**3 - 3*x",
+                              key="d21_crit", label_visibility="visible")
 
-            elif topic == "Linear approximation":
-                r = solve_approx(expr_s, a_v)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
+    if expr_str.strip():
+        try:
+            expr   = sp.sympify(expr_str)
+            df     = sp.diff(expr, x)
+            d2f    = sp.diff(df, x)
+            crits  = [c for c in sp.solve(df, x) if c.is_real]
 
+            if crits:
+                for cp in crits:
+                    fv  = float(expr.subs(x, cp))
+                    d2v = float(d2f.subs(x, cp))
+                    verdict = ("LOCAL MAXIMUM ∩" if d2v<0
+                               else "LOCAL MINIMUM ∪" if d2v>0
+                               else "Inconclusive")
+                    vcolor  = p["warm"] if "MAX" in verdict else p["sage"] if "MIN" in verdict else p["sand"]
+                    st.markdown(f"""
+<div style="background:{p['card']};border:1px solid {p['bdr']};border-left:3px solid {vcolor};
+            border-radius:0 8px 8px 0;padding:0.85rem 1.1rem;margin-bottom:0.65rem;">
+  <div style="font-family:'Fraunces',serif;font-size:1rem;color:{p['ink']};margin-bottom:0.3rem;">
+    x = {float(cp):.4f} &nbsp;→&nbsp; <span style="color:{vcolor};">{verdict}</span>
+  </div>
+  <div style="font-size:0.83rem;color:{p['ink2']};">
+    f({float(cp):.4f}) = {fv:.4f} &nbsp;·&nbsp; f''({float(cp):.4f}) = {d2v:.4f}
+  </div>
+</div>
+""", unsafe_allow_html=True)
             else:
-                r = solve_motion(expr_s)
-                for lbl,body,var in r["steps"]: style.step(lbl,body,var)
-                if "s" in r:
-                    st.markdown('<div class="graph-label">Position, velocity, acceleration</div>', unsafe_allow_html=True)
-                    fig = plot_motion_fig(r)
-                    if fig: st.pyplot(fig); plt.close(fig)
-        else:
-            style.empty_state("f'(x)")
+                st.markdown(f'<div style="font-size:0.87rem;color:{p["ink2"]};">No real critical points found.</div>',
+                            unsafe_allow_html=True)
+        except Exception as e:
+            st.markdown(f'<div style="font-size:0.82rem;color:{p["warm"]};">Could not analyze: {e}</div>',
+                        unsafe_allow_html=True)
+
+    st.markdown(f'<div style="width:48px;height:2px;background:{p["warm"]};margin:2rem 0 2.5rem;"></div>',
+                unsafe_allow_html=True)
+
+# ── Section: theorems ─────────────────────────────────────────────────────────
+def section_theorems(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.5rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 1rem;">The mean value theorems.</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    Three theorems, one idea: a continuous, differentiable function
+    cannot change without its derivative witnessing it.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    theorems = [
+        ("Rolle's Theorem", p["sage"],
+         "If f is continuous on [a,b], differentiable on (a,b), and f(a)=f(b) — then somewhere in between, f'(c)=0.",
+         "Intuition: if you start and end at the same height, you must have turned around at least once. At the turning point, the tangent is horizontal."),
+        ("Lagrange's Theorem (MVT)", p["warm"],
+         "If f is continuous on [a,b] and differentiable on (a,b) — then somewhere, f'(c) = [f(b)−f(a)]/(b−a).",
+         "Intuition: the instantaneous speed must equal the average speed at some moment. On every car journey, your speedometer reads exactly your average speed at least once."),
+        ("Cauchy's Theorem", p["sand"],
+         "For f and g satisfying the hypotheses, ∃c: [f(b)−f(a)]/[g(b)−g(a)] = f'(c)/g'(c).",
+         "This is the theorem behind de L'Hôpital's rule. Lagrange is the special case g(x)=x."),
+    ]
+
+    for title, color, statement, intuition in theorems:
+        st.markdown(f"""
+<div style="background:{p['card']};border:1px solid {p['bdr']};border-top:2px solid {color};
+            border-radius:10px;padding:1.2rem 1.4rem;margin-bottom:1rem;">
+  <div style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.14em;
+              text-transform:uppercase;color:{color};margin-bottom:0.6rem;">{title}</div>
+  <div style="font-size:0.95rem;color:{p['ink']};line-height:1.7;margin-bottom:0.6rem;">{statement}</div>
+  <div style="font-size:0.85rem;font-weight:300;color:{p['ink2']};line-height:1.7;
+              font-style:italic;">{intuition}</div>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown(f'<div style="width:48px;height:2px;background:{p["warm"]};margin:2rem 0 2.5rem;"></div>',
+                unsafe_allow_html=True)
+
+# ── Section: the miracle ──────────────────────────────────────────────────────
+def section_miracle(p):
+    st.markdown(f"""
+<div style="max-width:680px;margin-bottom:1.5rem;">
+  <h2 style="font-family:'Fraunces',serif;font-size:1.7rem;font-weight:400;
+             color:{p['ink']};margin:0 0 1rem;">The most remarkable fact in calculus.</h2>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    Every function changes under differentiation. Polynomials drop a degree.
+    Sin becomes cos. Logarithms become reciprocals.
+    But one function is completely unchanged:
+  </p>
+  <div style="font-family:'Fraunces',serif;font-size:1.6rem;color:{p['ink']};
+              text-align:center;padding:1.2rem;background:{p['bg2']};
+              border-radius:10px;margin-bottom:1rem;">
+    (eˣ)' = eˣ
+  </div>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    eˣ is its own derivative. It grows at exactly the rate it currently has.
+    This self-referential property makes it appear everywhere in nature —
+    radioactive decay, population growth, compound interest, cooling,
+    electrical circuits, probability distributions.
+  </p>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0 0 0.9rem;">
+    And Euler connected it to something even stranger:
+  </p>
+  <div style="font-family:'Fraunces',serif;font-size:1.4rem;color:{p['ink']};
+              text-align:center;padding:1rem;background:{p['bg2']};
+              border-radius:10px;margin-bottom:1rem;">
+    e^(iπ) + 1 = 0
+  </div>
+  <p style="font-size:0.97rem;font-weight:300;color:{p['ink2']};line-height:1.8;margin:0;">
+    Five fundamental constants — e, i, π, 1, 0 — in one equation.
+    Richard Feynman called it "the most remarkable formula in mathematics."
+    It follows directly from the properties of eˣ and the derivative.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Public entry point ────────────────────────────────────────────────────────
+def render(n, name, subtitle, category):
+    dark = st.session_state.get("dark", False)
+    p    = _pal(dark)
+    style.module_header(category, n, name, subtitle)
+
+    section_hook(p)
+    section_average_to_instant(p)
+    section_geometry(p)
+    section_definition(p)
+    section_rules(p)
+    section_interactive(p)
+    section_critical(p)
+    section_theorems(p)
+    section_miracle(p)
