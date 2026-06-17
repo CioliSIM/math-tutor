@@ -3,115 +3,95 @@
 import random
 import sympy as sp
 import streamlit as st
-import style
 
 x = sp.Symbol('x')
 
+# ── Feedback HTML helpers ─────────────────────────────────────────────────────
+
+def _correct_html(answer, explanation=""):
+    extra = f'<div style="font-size:0.78rem;margin-top:0.3rem;opacity:0.8;">{explanation}</div>' if explanation else ""
+    return f"""
+<div style="background:rgba(45,90,78,0.12);border-left:3px solid #2d5a4e;
+            border-radius:0 8px 8px 0;padding:0.75rem 1rem;font-size:0.87rem;
+            color:var(--ink2);margin-top:0.5rem;animation:fadeUp 0.2s ease both;">
+  <strong style="color:#2d5a4e;">✓ Correct</strong> — {answer}{extra}
+</div>"""
+
+def _wrong_html(answer, explanation=""):
+    extra = f'<div style="font-size:0.78rem;margin-top:0.3rem;opacity:0.85;">{explanation}</div>' if explanation else ""
+    return f"""
+<div style="background:rgba(200,96,42,0.08);border-left:3px solid #c8602a;
+            border-radius:0 8px 8px 0;padding:0.75rem 1rem;font-size:0.87rem;
+            color:var(--ink2);margin-top:0.5rem;animation:fadeUp 0.2s ease both;">
+  <strong style="color:#c8602a;">✗ Not quite</strong> — answer is <strong style="color:#c8602a;">{answer}</strong>{extra}
+</div>"""
+
+def _question_label(q, hint=""):
+    hint_html = f'<div style="font-family:\'DM Mono\',monospace;font-size:0.68rem;color:var(--ink2);margin-bottom:0.5rem;opacity:0.75;">{hint}</div>' if hint else ""
+    return f"""
+<div style="font-size:0.97rem;font-weight:400;color:var(--ink);
+            line-height:1.72;margin-bottom:0.55rem;">{q}</div>{hint_html}"""
+
+
 # ── Question types ─────────────────────────────────────────────────────────────
 
-def numeric_question(q, answer, tolerance=1e-6, explanation=""):
-    """Numeric input question."""
-    key = f"prac_num_{q[:20]}"
-    st.markdown(f"""
-<div style="font-size:0.95rem;font-weight:400;color:var(--ink);
-            line-height:1.7;margin-bottom:0.8rem;">{q}</div>
-""", unsafe_allow_html=True)
-    col1, col2 = st.columns([2,1])
-    with col1:
-        user_ans = st.text_input("Your answer", key=key, label_visibility="collapsed",
-                                  placeholder="Enter a number or expression…")
-    with col2:
-        check = st.button("Check →", key=f"chk_{key}")
-
-    if check and user_ans.strip():
+def numeric_question(q, answer, tolerance=1e-6, explanation="", key_suffix=""):
+    """Numeric input — feedback appears instantly as you type."""
+    key = f"prac_num_{q[:25]}_{key_suffix}"
+    st.markdown(_question_label(q), unsafe_allow_html=True)
+    user_ans = st.text_input("", key=key, label_visibility="collapsed",
+                              placeholder="Type your answer…")
+    if user_ans.strip():
         try:
             user_val = float(sp.sympify(user_ans))
             correct  = abs(user_val - float(answer)) < tolerance
-            if correct:
-                st.markdown(f"""
-<div style="background:rgba(45,90,78,0.1);border-left:3px solid #2d5a4e;
-            border-radius:0 6px 6px 0;padding:0.7rem 1rem;font-size:0.85rem;
-            color:var(--ink2);margin-top:0.4rem;">
-  ✓ Correct — <strong style="color:#2d5a4e;">{answer}</strong>
-</div>""", unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-<div style="background:rgba(200,96,42,0.08);border-left:3px solid #c8602a;
-            border-radius:0 6px 6px 0;padding:0.7rem 1rem;font-size:0.85rem;
-            color:var(--ink2);margin-top:0.4rem;">
-  ✗ Not quite. The answer is <strong style="color:#c8602a;">{answer}</strong>.<br>
-  <span style="font-size:0.82rem;">{explanation}</span>
-</div>""", unsafe_allow_html=True)
+            html = _correct_html(answer, explanation) if correct else _wrong_html(answer, explanation)
+            st.markdown(html, unsafe_allow_html=True)
+            return correct
         except Exception:
-            st.warning("Please enter a valid number or expression.")
+            st.markdown(
+                '<div style="font-size:0.78rem;color:var(--ink2);opacity:0.7;margin-top:0.3rem;">'
+                'Enter a valid number or expression (e.g. 1/3, sqrt(2))</div>',
+                unsafe_allow_html=True)
+    return None
 
 
-def multiple_choice(q, options, correct_idx, explanation=""):
-    """Multiple choice question."""
-    key = f"prac_mc_{q[:20]}"
-    st.markdown(f"""
-<div style="font-size:0.95rem;font-weight:400;color:var(--ink);
-            line-height:1.7;margin-bottom:0.8rem;">{q}</div>
-""", unsafe_allow_html=True)
-    choice = st.radio("", options, key=key, label_visibility="collapsed",
-                       index=None)
+def multiple_choice(q, options, correct_idx, explanation="", key_suffix=""):
+    """Multiple choice — feedback appears instantly on selection."""
+    key = f"prac_mc_{q[:25]}_{key_suffix}"
+    st.markdown(_question_label(q), unsafe_allow_html=True)
+    choice = st.radio("", options, key=key, label_visibility="collapsed", index=None)
     if choice is not None:
-        if options.index(choice) == correct_idx:
-            st.markdown(f"""
-<div style="background:rgba(45,90,78,0.1);border-left:3px solid #2d5a4e;
-            border-radius:0 6px 6px 0;padding:0.7rem 1rem;font-size:0.85rem;
-            color:var(--ink2);margin-top:0.4rem;">
-  ✓ Correct — <strong style="color:#2d5a4e;">{options[correct_idx]}</strong>
-</div>""", unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-<div style="background:rgba(200,96,42,0.08);border-left:3px solid #c8602a;
-            border-radius:0 6px 6px 0;padding:0.7rem 1rem;font-size:0.85rem;
-            color:var(--ink2);margin-top:0.4rem;">
-  ✗ Not quite. The correct answer is <strong style="color:#c8602a;">{options[correct_idx]}</strong>.<br>
-  <span style="font-size:0.82rem;">{explanation}</span>
-</div>""", unsafe_allow_html=True)
+        correct = options.index(choice) == correct_idx
+        html = (_correct_html(options[correct_idx], explanation) if correct
+                else _wrong_html(options[correct_idx], explanation))
+        st.markdown(html, unsafe_allow_html=True)
+        return correct
+    return None
 
 
-def symbolic_question(q, answer_expr, var=x, explanation=""):
-    """Symbolic answer question — compared using SymPy simplification."""
-    key = f"prac_sym_{q[:20]}"
-    st.markdown(f"""
-<div style="font-size:0.95rem;font-weight:400;color:var(--ink);
-            line-height:1.7;margin-bottom:0.8rem;">{q}</div>
-<div style="font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--ink2);
-            margin-bottom:0.5rem;">Use Python notation: x**2, sin(x), exp(x), log(x)</div>
-""", unsafe_allow_html=True)
-    col1, col2 = st.columns([2,1])
-    with col1:
-        user_ans = st.text_input("Your answer", key=key, label_visibility="collapsed",
-                                  placeholder="e.g. 3*x**2 + cos(x)")
-    with col2:
-        check = st.button("Check →", key=f"chk_{key}")
-
-    if check and user_ans.strip():
+def symbolic_question(q, answer_expr, var=x, explanation="", key_suffix=""):
+    """Symbolic input — feedback appears instantly as you type."""
+    key = f"prac_sym_{q[:25]}_{key_suffix}"
+    st.markdown(_question_label(q, "Python notation: x**2, sin(x), exp(x), log(x)"),
+                unsafe_allow_html=True)
+    user_ans = st.text_input("", key=key, label_visibility="collapsed",
+                              placeholder="e.g. 3*x**2 + cos(x)")
+    if user_ans.strip():
         try:
             user_expr = sp.sympify(user_ans)
-            diff = sp.simplify(user_expr - answer_expr)
-            correct = diff == 0
-            ans_str = str(answer_expr)
-            if correct:
-                st.markdown(f"""
-<div style="background:rgba(45,90,78,0.1);border-left:3px solid #2d5a4e;
-            border-radius:0 6px 6px 0;padding:0.7rem 1rem;font-size:0.85rem;
-            color:var(--ink2);margin-top:0.4rem;">
-  ✓ Correct — <strong style="color:#2d5a4e;">{ans_str}</strong>
-</div>""", unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-<div style="background:rgba(200,96,42,0.08);border-left:3px solid #c8602a;
-            border-radius:0 6px 6px 0;padding:0.7rem 1rem;font-size:0.85rem;
-            color:var(--ink2);margin-top:0.4rem;">
-  ✗ Not quite. The answer is <strong style="color:#c8602a;">{ans_str}</strong>.<br>
-  <span style="font-size:0.82rem;">{explanation}</span>
-</div>""", unsafe_allow_html=True)
+            diff      = sp.simplify(user_expr - answer_expr)
+            correct   = diff == 0
+            ans_str   = str(answer_expr)
+            html = _correct_html(ans_str, explanation) if correct else _wrong_html(ans_str, explanation)
+            st.markdown(html, unsafe_allow_html=True)
+            return correct
         except Exception:
-            st.warning("Could not parse your answer. Check the notation.")
+            st.markdown(
+                '<div style="font-size:0.78rem;color:var(--ink2);opacity:0.7;margin-top:0.3rem;">'
+                'Could not parse — check notation</div>',
+                unsafe_allow_html=True)
+    return None
 
 
 # ── Question banks per module ──────────────────────────────────────────────────
@@ -845,58 +825,90 @@ QUESTION_BANKS = {
 def render_practice(chapter_n, dark=False):
     """Render the practice section for a given chapter."""
     if chapter_n not in QUESTION_BANKS:
+        st.markdown('<div style="font-size:0.85rem;color:var(--ink2);opacity:0.6;">No practice questions available for this chapter yet.</div>', unsafe_allow_html=True)
         return
 
-    ink  = "#e8e0d4" if dark else "#1a1814"
     ink2 = "#9e9080" if dark else "#4a4540"
     bdr  = "#2a2620" if dark else "#ddd5c8"
     card = "#161410" if dark else "#ffffff"
     warm = "#d4703a" if dark else "#c8602a"
     sand = "#b89848" if dark else "#a8893e"
+    sage = "#4a8070" if dark else "#2d5a4e"
 
+    seed_key  = f"prac_seed_{chapter_n}"
+    score_key = f"prac_score_{chapter_n}"
+    total_key = f"prac_total_{chapter_n}"
+
+    if seed_key  not in st.session_state: st.session_state[seed_key]  = 42
+    if score_key not in st.session_state: st.session_state[score_key] = 0
+    if total_key not in st.session_state: st.session_state[total_key] = 0
+
+    questions = QUESTION_BANKS[chapter_n]()
+    score = st.session_state[score_key]
+    total = st.session_state[total_key]
+    pct   = int(score / total * 100) if total > 0 else 0
+
+    # Header with live score bar
     st.markdown(f"""
-<div style="margin-top:2rem;">
-  <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:1.5rem;">
-    <div style="width:6px;height:6px;border-radius:50%;background:{warm};flex-shrink:0;"></div>
+<div style="display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:1.2rem;flex-wrap:wrap;gap:0.5rem;">
+  <div style="display:flex;align-items:center;gap:0.9rem;">
+    <div style="width:6px;height:6px;border-radius:50%;background:{warm};"></div>
     <div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.2em;
-                text-transform:uppercase;color:{sand};">Practice</div>
-    <div style="flex:1;height:1px;background:{bdr};"></div>
+                text-transform:uppercase;color:{sand};">Practice · Chapter {chapter_n:02d}</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:1rem;">
+    <div style="font-family:'DM Mono',monospace;font-size:0.72rem;color:{ink2};">
+      {score}/{total} correct &nbsp;·&nbsp; <strong style="color:{warm if pct<60 else sage};">{pct}%</strong>
+    </div>
+    <div style="width:100px;height:4px;background:{bdr};border-radius:2px;overflow:hidden;">
+      <div style="width:{pct}%;height:100%;background:{warm if pct<60 else sage};
+                  border-radius:2px;transition:width 0.4s ease;"></div>
+    </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-    # Seed control
-    seed_key = f"prac_seed_{chapter_n}"
-    if seed_key not in st.session_state:
-        st.session_state[seed_key] = 42
-
-    questions = QUESTION_BANKS[chapter_n]()
-
-    # Show questions
+    results = []
     for i, q in enumerate(questions):
-        with st.container():
-            st.markdown(f"""
-<div style="background:{card};border:1px solid {bdr};border-radius:8px;
-            padding:1.1rem 1.3rem;margin-bottom:1rem;">
-  <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.14em;
-              text-transform:uppercase;color:{sand};margin-bottom:0.6rem;">
-    Question {i+1}
+        st.markdown(f"""
+<div style="background:{card};border:1px solid {bdr};border-radius:10px;
+            padding:1.2rem 1.4rem;margin-bottom:0.9rem;">
+  <div style="font-family:'DM Mono',monospace;font-size:0.5rem;letter-spacing:0.14em;
+              text-transform:uppercase;color:{sand};margin-bottom:0.7rem;">
+    Q{i+1}
   </div>
 """, unsafe_allow_html=True)
+        ks = f"{chapter_n}_{i}"
+        if q["type"] == "multiple_choice":
+            r = multiple_choice(q["q"], q["options"], q["correct"],
+                                q.get("explanation",""), key_suffix=ks)
+        elif q["type"] == "numeric":
+            r = numeric_question(q["q"], q["answer"],
+                                 explanation=q.get("explanation",""), key_suffix=ks)
+        elif q["type"] == "symbolic":
+            r = symbolic_question(q["q"], q["answer"],
+                                  explanation=q.get("explanation",""), key_suffix=ks)
+        else:
+            r = None
+        results.append(r)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-            if q["type"] == "multiple_choice":
-                multiple_choice(q["q"], q["options"], q["correct"],
-                                q.get("explanation",""))
-            elif q["type"] == "numeric":
-                numeric_question(q["q"], q["answer"],
-                                 explanation=q.get("explanation",""))
-            elif q["type"] == "symbolic":
-                symbolic_question(q["q"], q["answer"],
-                                  explanation=q.get("explanation",""))
+    answered = [r for r in results if r is not None]
+    if answered:
+        st.session_state[score_key] = sum(1 for r in answered if r)
+        st.session_state[total_key] = len(answered)
 
-            st.markdown("</div>", unsafe_allow_html=True)
-
-    # New set button
-    if st.button("New set of questions →", key=f"prac_new_{chapter_n}"):
-        st.session_state[seed_key] = random.randint(0, 9999)
-        st.rerun()
+    col1, col2 = st.columns([2,3])
+    with col1:
+        if st.button("↻  New questions", key=f"prac_new_{chapter_n}"):
+            st.session_state[seed_key]  = __import__('random').randint(0, 9999)
+            st.session_state[score_key] = 0
+            st.session_state[total_key] = 0
+            st.rerun()
+    with col2:
+        if total > 0:
+            msg = ("🎯 Perfect score!" if pct==100 else "✓ Good work." if pct>=70
+                   else "Keep going — practice makes permanent.")
+            st.markdown(f'<div style="font-size:0.8rem;color:{ink2};padding:0.4rem 0;">{msg}</div>',
+                        unsafe_allow_html=True)
