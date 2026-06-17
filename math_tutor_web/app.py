@@ -289,6 +289,7 @@ def render_home():
     # ── Matches section ───────────────────────────────────────────────────────
     import random
     import matches as mx
+    from datetime import date
 
     st.markdown(f"""
 <div style="margin:4.5rem 0 0;max-width:900px;">
@@ -309,7 +310,72 @@ def render_home():
 </div>
 """, unsafe_allow_html=True)
 
-    # Filters
+    # ── Match of the day ─────────────────────────────────────────────────────
+    today      = date.today()
+    day_seed   = int(today.strftime("%Y%m%d"))
+    day_rng    = random.Random(day_seed)
+    day_prob   = day_rng.choice(mx.PROBLEMS)
+    day_color  = mx.LEVEL_COLORS.get(day_prob["level"], warm)
+    day_str    = today.strftime("%B %d, %Y")
+
+    st.markdown(f"""
+<div style="max-width:780px;margin-bottom:2.5rem;">
+  <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.9rem;">
+    <div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.18em;
+                text-transform:uppercase;color:{sand};">Match of the day</div>
+    <div style="font-family:'DM Mono',monospace;font-size:0.54rem;color:{ink2};">{day_str}</div>
+  </div>
+  <div style="background:{card};border:1px solid {bdr};border-top:2px solid {day_color};
+              border-radius:12px;padding:1.8rem 2rem;">
+    <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1.1rem;">
+      <span style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.18em;
+                   text-transform:uppercase;color:{day_color};">{day_prob['level']}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:0.54rem;color:{ink2};">
+        · {' · '.join(day_prob['topics'])}
+      </span>
+    </div>
+    <div style="font-family:'Fraunces',serif;font-size:1.2rem;color:{ink};
+                line-height:1.55;font-weight:400;">
+      {day_prob['statement']}
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    motd_col1, motd_col2 = st.columns([1, 5])
+    with motd_col1:
+        motd_hint = st.button("Hint", key="motd_hint")
+    with motd_col2:
+        motd_sol = st.button("Solution", key="motd_sol")
+
+    if motd_hint:
+        st.markdown(f"""
+<div style="background:{bg2};border:1px solid {bdr};border-left:3px solid {day_color};
+            border-radius:0 8px 8px 0;padding:0.9rem 1.2rem;max-width:780px;
+            font-size:0.87rem;color:{ink2};line-height:1.7;margin-bottom:1rem;">
+  <strong style="color:{ink};">Hint</strong><br>{day_prob['hint']}
+</div>
+""", unsafe_allow_html=True)
+
+    if motd_sol:
+        st.markdown(f"""
+<div style="background:{bg2};border:1px solid {bdr};border-left:3px solid {warm};
+            border-radius:0 8px 8px 0;padding:0.9rem 1.2rem;max-width:780px;
+            font-size:0.87rem;color:{ink2};line-height:1.7;margin-bottom:1rem;">
+  <strong style="color:{ink};">Solution</strong><br>{day_prob['solution']}<br><br>
+  <strong style="color:{ink};">Answer:</strong> {day_prob['answer']}
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown(f'<div style="height:1px;background:{bdr};max-width:780px;margin:2rem 0 1.5rem;"></div>', unsafe_allow_html=True)
+
+    # ── Explore problems ──────────────────────────────────────────────────────
+    st.markdown(f"""
+<div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.18em;
+            text-transform:uppercase;color:{sand};margin-bottom:1rem;">
+  Explore problems
+</div>
+""", unsafe_allow_html=True)
     filter_col1, filter_col2 = st.columns([1, 2])
     with filter_col1:
         level_choice = st.radio(
