@@ -263,6 +263,95 @@ def render_home():
                         st.session_state["current_module"] = n
                         st.rerun()
 
+    # ── Matches section ───────────────────────────────────────────────────────
+    import random
+    import matches as mx
+
+    st.markdown(f"""
+<div style="margin:4.5rem 0 0;max-width:900px;">
+  <div style="display:flex;align-items:center;gap:0.9rem;margin-bottom:1.5rem;">
+    <div style="width:8px;height:8px;border-radius:50%;background:{warm};flex-shrink:0;"></div>
+    <div style="font-family:'DM Mono',monospace;font-size:0.58rem;letter-spacing:0.2em;
+                text-transform:uppercase;color:{ink2};">Matches</div>
+    <div style="flex:1;height:1px;background:{bdr};"></div>
+  </div>
+  <p style="font-size:0.93rem;font-weight:300;color:{ink2};line-height:1.8;
+            max-width:580px;margin:0 0 2rem;">
+    A match is different from a drill. You are given a problem — you are not told
+    which technique to use. That is the point. Read carefully, think, then reveal the solution.
+    Three levels: <strong style="color:#2d5a4e;">Rookie</strong>,
+    <strong style="color:#a8893e;">Competitive</strong>,
+    <strong style="color:#c8602a;">Olympic</strong>.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # Level filter
+    level_choice = st.radio(
+        "Level",
+        ["All"] + mx.LEVEL_ORDER,
+        horizontal=True,
+        key="match_level",
+        label_visibility="collapsed",
+    )
+
+    pool = mx.PROBLEMS if level_choice == "All" else [p for p in mx.PROBLEMS if p["level"] == level_choice]
+
+    # Pick a random problem (stable per session per level choice)
+    seed_key = f"match_seed_{level_choice}"
+    if seed_key not in st.session_state:
+        st.session_state[seed_key] = random.randint(0, 10000)
+
+    rng     = random.Random(st.session_state[seed_key])
+    problem = rng.choice(pool)
+    lcolor  = mx.LEVEL_COLORS.get(problem["level"], warm)
+
+    st.markdown(f"""
+<div style="background:{card};border:1px solid {bdr};border-top:2px solid {lcolor};
+            border-radius:12px;padding:1.8rem 2rem;max-width:780px;margin-bottom:1rem;">
+  <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1.2rem;">
+    <span style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.18em;
+                 text-transform:uppercase;color:{lcolor};">{problem['level']}</span>
+    <span style="font-family:'DM Mono',monospace;font-size:0.54rem;color:{ink2};">
+      · {' · '.join(problem['topics'])}
+    </span>
+  </div>
+  <div style="font-family:'Fraunces',serif;font-size:1.2rem;color:{ink};
+              line-height:1.55;margin-bottom:1.5rem;font-weight:400;">
+    {problem['statement']}
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    col_a, col_b, col_c = st.columns([1, 1, 4])
+    with col_a:
+        show_hint = st.button("Hint", key="match_hint")
+    with col_b:
+        show_sol = st.button("Solution", key="match_sol")
+    with col_c:
+        if st.button("New problem →", key="match_new"):
+            st.session_state[seed_key] = random.randint(0, 10000)
+            st.rerun()
+
+    if show_hint:
+        st.markdown(f"""
+<div style="background:{bg2};border:1px solid {bdr};border-left:3px solid {lcolor};
+            border-radius:0 8px 8px 0;padding:0.9rem 1.2rem;max-width:780px;
+            font-size:0.87rem;color:{ink2};line-height:1.7;margin-top:0.5rem;">
+  <strong style="color:{ink};">Hint</strong><br>{problem['hint']}
+</div>
+""", unsafe_allow_html=True)
+
+    if show_sol:
+        st.markdown(f"""
+<div style="background:{bg2};border:1px solid {bdr};border-left:3px solid {warm};
+            border-radius:0 8px 8px 0;padding:0.9rem 1.2rem;max-width:780px;
+            font-size:0.87rem;color:{ink2};line-height:1.7;margin-top:0.5rem;">
+  <strong style="color:{ink};">Solution</strong><br>{problem['solution']}<br><br>
+  <strong style="color:{ink};">Answer:</strong> {problem['answer']}
+</div>
+""", unsafe_allow_html=True)
+
     # Feedback
     st.markdown(f"""
 <div style="margin:4rem 0 1.5rem;max-width:680px;">
