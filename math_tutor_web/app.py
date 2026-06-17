@@ -16,6 +16,8 @@ if "dark" not in st.session_state:
     st.session_state["dark"] = False
 if "current_module" not in st.session_state:
     st.session_state["current_module"] = None
+if "current_mode" not in st.session_state:
+    st.session_state["current_mode"] = "learn"
 
 style.inject(dark=st.session_state["dark"])
 
@@ -325,12 +327,19 @@ def render_home():
                     prereq_str = ""
                     if prereqs:
                         prereq_str = f'<div style="font-family:\'DM Mono\',monospace;font-size:0.54rem;color:{ink2};margin-top:0.5rem;opacity:0.7;">needs: {", ".join(prereqs)}</div>'
-                    visited  = prog.is_visited(n)
-                    visited_badge = f'<span style="font-family:\'DM Mono\',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:{sage};margin-left:0.5rem;">✓ visited</span>' if visited else ""
+                    visited_badge = f'<span style="font-family:\'DM Mono\',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:{sage};margin-left:0.5rem;">✓ visited</span>' if prog.is_visited(n) else ""
                     st.markdown(prereq_str + visited_badge, unsafe_allow_html=True)
-                    if st.button(f"Open", key=f"open_{n}"):
-                        st.session_state["current_module"] = n
-                        st.rerun()
+                    btn_col1, btn_col2 = st.columns(2, gap="small")
+                    with btn_col1:
+                        if st.button("Open", key=f"open_{n}"):
+                            st.session_state["current_module"] = n
+                            st.session_state["current_mode"] = "learn"
+                            st.rerun()
+                    with btn_col2:
+                        if st.button("Practice", key=f"prac_{n}"):
+                            st.session_state["current_module"] = n
+                            st.session_state["current_mode"] = "practice"
+                            st.rerun()
 
     # ── Matches section ───────────────────────────────────────────────────────
     import random
@@ -572,97 +581,117 @@ def render_home():
 
 
 def render_module(n):
+    mode = st.session_state.get("current_mode", "learn")
     render_topbar(show_back=True)
 
-    # Track visited modules (session + localStorage)
+    # Track visited
     prog.mark_visited(n)
-    if "visited" not in st.session_state:
-        st.session_state["visited"] = set()
-    st.session_state["visited"].add(n)
 
     mod = next((m for m in MODULES if m[0] == n), None)
     if not mod:
         return
     _, name, subtitle, category, implemented = mod
 
-    # Prerequisite advisory
-    import prerequisites as px
-    missing = px.get_missing(n, st.session_state["visited"])
-    if missing:
-        missing_names = [px.MODULE_NAMES[m] for m in missing]
-        names_str = " and ".join(f"<strong>{nm}</strong>" for nm in missing_names)
-        st.markdown(f"""
-<div style="background:{'#181510' if dark else '#fdf6ed'};
-            border:1px solid {'#3a2e1a' if dark else '#e8d8b8'};
-            border-left:3px solid {sand};
-            border-radius:0 10px 10px 0;
+    # Mode toggle in header
+    dark_mode = st.session_state.get("dark", False)
+    ink2  = "#9e9080" if dark_mode else "#4a4540"
+    bdr   = "#2a2620" if dark_mode else "#ddd5c8"
+    warm  = "#d4703a" if dark_mode else "#c8602a"
+
+    tab_col1, tab_col2, tab_col3 = st.columns([2, 1, 5])
+    with tab_col1:
+        if st.button("📖  Learn", key="mode_learn",
+                     type="primary" if mode == "learn" else "secondary"):
+            st.session_state["current_mode"] = "learn"
+            st.rerun()
+    with tab_col2:
+        if st.button("✏️  Practice", key="mode_practice",
+                     type="primary" if mode == "practice" else "secondary"):
+            st.session_state["current_mode"] = "practice"
+            st.rerun()
+
+    st.markdown(f'<div style="height:1px;background:{bdr};margin:0.5rem 0 1.5rem;"></div>',
+                unsafe_allow_html=True)
+
+    # Prerequisite advisory (only in learn mode)
+    if mode == "learn":
+        import prerequisites as px
+        missing = px.get_missing(n, st.session_state.get("visited", set()))
+        if missing:
+            missing_names = [px.MODULE_NAMES[m] for m in missing]
+            names_str = " and ".join(f"<strong>{nm}</strong>" for nm in missing_names)
+            sand = "#b89848" if dark_mode else "#a8893e"
+            bg2  = "#181510" if dark_mode else "#fdf6ed"
+            ink2v = "#9e9080" if dark_mode else "#4a4540"
+            st.markdown(f"""
+<div style="background:{bg2};border:1px solid {'#3a2e1a' if dark_mode else '#e8d8b8'};
+            border-left:3px solid {sand};border-radius:0 10px 10px 0;
             padding:1rem 1.3rem;margin-bottom:1.5rem;max-width:720px;">
   <div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.16em;
-              text-transform:uppercase;color:{sand};margin-bottom:0.4rem;">
-    Before you begin
-  </div>
-  <div style="font-size:0.88rem;color:{ink2};line-height:1.75;">
-    This chapter builds on {names_str}. 
-    You can continue — but visiting {'those chapters' if len(missing)>1 else 'that chapter'} first 
+              text-transform:uppercase;color:{sand};margin-bottom:0.4rem;">Before you begin</div>
+  <div style="font-size:0.88rem;color:{ink2v};line-height:1.75;">
+    This chapter builds on {names_str}.
+    You can continue — but visiting {'those chapters' if len(missing)>1 else 'that chapter'} first
     will make the concepts here significantly clearer.
   </div>
 </div>
 """, unsafe_allow_html=True)
+
+    import practice as prac
 
     if not implemented:
         style.module_header(category, n, name, subtitle)
         style.coming_soon(n, name)
         return
 
-    import practice as prac
-    dark_mode = st.session_state.get("dark", False)
-
-    if n == 1:
-        from modules import step1;  step1.render(n, name, subtitle, category)
-    elif n == 2:
-        from modules import step2;  step2.render(n, name, subtitle, category)
-    elif n == 3:
-        from modules import step3;  step3.render(n, name, subtitle, category)
-    elif n == 4:
-        from modules import step4;  step4.render(n, name, subtitle, category)
-    elif n == 5:
-        from modules import step5;  step5.render(n, name, subtitle, category)
-    elif n == 6:
-        from modules import step6;  step6.render(n, name, subtitle, category)
-    elif n == 7:
-        from modules import step7;  step7.render(n, name, subtitle, category)
-    elif n == 8:
-        from modules import step8;  step8.render(n, name, subtitle, category)
-    elif n == 9:
-        from modules import step9;  step9.render(n, name, subtitle, category)
-    elif n == 10:
-        from modules import step10; step10.render(n, name, subtitle, category)
-    elif n == 11:
-        from modules import step11; step11.render(n, name, subtitle, category)
-    elif n == 12:
-        from modules import step12; step12.render(n, name, subtitle, category)
-    elif n == 13:
-        from modules import step13; step13.render(n, name, subtitle, category)
-    elif n == 14:
-        from modules import step14; step14.render(n, name, subtitle, category)
-    elif n == 15:
-        from modules import step15; step15.render(n, name, subtitle, category)
-    elif n == 16:
-        from modules import step16; step16.render(n, name, subtitle, category)
-    elif n == 17:
-        from modules import step17; step17.render(n, name, subtitle, category)
-    elif n == 18:
-        from modules import step18; step18.render(n, name, subtitle, category)
-    elif n == 19:
-        from modules import step19; step19.render(n, name, subtitle, category)
-    elif n == 20:
-        from modules import step20; step20.render(n, name, subtitle, category)
-    elif n == 21:
-        from modules import step21; step21.render(n, name, subtitle, category)
-    elif n == 22:
-        from modules import step22; step22.render(n, name, subtitle, category)
-
-    prac.render_practice(n, dark_mode)
+    if mode == "practice":
+        style.module_header(category, n, name, subtitle)
+        prac.render_practice(n, dark_mode)
+    else:
+        if n == 1:
+            from modules import step1;  step1.render(n, name, subtitle, category)
+        elif n == 2:
+            from modules import step2;  step2.render(n, name, subtitle, category)
+        elif n == 3:
+            from modules import step3;  step3.render(n, name, subtitle, category)
+        elif n == 4:
+            from modules import step4;  step4.render(n, name, subtitle, category)
+        elif n == 5:
+            from modules import step5;  step5.render(n, name, subtitle, category)
+        elif n == 6:
+            from modules import step6;  step6.render(n, name, subtitle, category)
+        elif n == 7:
+            from modules import step7;  step7.render(n, name, subtitle, category)
+        elif n == 8:
+            from modules import step8;  step8.render(n, name, subtitle, category)
+        elif n == 9:
+            from modules import step9;  step9.render(n, name, subtitle, category)
+        elif n == 10:
+            from modules import step10; step10.render(n, name, subtitle, category)
+        elif n == 11:
+            from modules import step11; step11.render(n, name, subtitle, category)
+        elif n == 12:
+            from modules import step12; step12.render(n, name, subtitle, category)
+        elif n == 13:
+            from modules import step13; step13.render(n, name, subtitle, category)
+        elif n == 14:
+            from modules import step14; step14.render(n, name, subtitle, category)
+        elif n == 15:
+            from modules import step15; step15.render(n, name, subtitle, category)
+        elif n == 16:
+            from modules import step16; step16.render(n, name, subtitle, category)
+        elif n == 17:
+            from modules import step17; step17.render(n, name, subtitle, category)
+        elif n == 18:
+            from modules import step18; step18.render(n, name, subtitle, category)
+        elif n == 19:
+            from modules import step19; step19.render(n, name, subtitle, category)
+        elif n == 20:
+            from modules import step20; step20.render(n, name, subtitle, category)
+        elif n == 21:
+            from modules import step21; step21.render(n, name, subtitle, category)
+        elif n == 22:
+            from modules import step22; step22.render(n, name, subtitle, category)
 
 
 current = st.session_state.get("current_module")
