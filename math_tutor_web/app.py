@@ -3,6 +3,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
 import style
+import progress as prog
 
 st.set_page_config(
     page_title="Mathematics",
@@ -18,6 +19,8 @@ if "current_module" not in st.session_state:
 
 style.inject(dark=st.session_state["dark"])
 
+# Sync localStorage progress on every load
+prog.load_and_sync()
 dark  = st.session_state["dark"]
 ink   = "#e8e0d4" if dark else "#1a1814"
 ink2  = "#9e9080" if dark else "#4a4540"
@@ -201,8 +204,10 @@ def render_home():
 </div>
 """, unsafe_allow_html=True)
 
-    total = len(MODULES)
-    done  = sum(1 for m in MODULES if m[4])
+    total    = len(MODULES)
+    done     = sum(1 for m in MODULES if m[4])
+    visited  = len(prog.get_visited())
+    pct      = int(visited / total * 100)
     st.markdown(f"""
 <div style="display:flex;gap:0;border:1px solid {bdr};border-radius:10px;
             background:{card};overflow:hidden;width:fit-content;margin:2.2rem 0 0.5rem;">
@@ -212,15 +217,25 @@ def render_home():
                 text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Chapters</div>
   </div>
   <div style="padding:0.9rem 1.8rem;border-right:1px solid {bdr};">
-    <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{sage};line-height:1;">{done}</div>
+    <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{sage};line-height:1;">{visited}</div>
     <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.16em;
-                text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Available</div>
+                text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Visited</div>
+  </div>
+  <div style="padding:0.9rem 1.8rem;border-right:1px solid {bdr};">
+    <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{warm};line-height:1;">{pct}%</div>
+    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.16em;
+                text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Progress</div>
   </div>
   <div style="padding:0.9rem 1.8rem;">
     <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{ink};line-height:1;">∞</div>
     <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.16em;
                 text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Patience</div>
   </div>
+</div>
+<div style="width:fit-content;min-width:320px;height:3px;background:{bdr};
+            border-radius:2px;margin-bottom:1.5rem;overflow:hidden;">
+  <div style="width:{pct}%;height:100%;background:{warm};
+              border-radius:2px;transition:width 0.5s ease;"></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -264,7 +279,9 @@ def render_home():
                     prereq_str = ""
                     if prereqs:
                         prereq_str = f'<div style="font-family:\'DM Mono\',monospace;font-size:0.54rem;color:{ink2};margin-top:0.5rem;opacity:0.7;">needs: {", ".join(prereqs)}</div>'
-                    st.markdown(prereq_str, unsafe_allow_html=True)
+                    visited  = prog.is_visited(n)
+                    visited_badge = f'<span style="font-family:\'DM Mono\',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:{sage};margin-left:0.5rem;">✓ visited</span>' if visited else ""
+                    st.markdown(prereq_str + visited_badge, unsafe_allow_html=True)
                     if st.button(f"Open", key=f"open_{n}"):
                         st.session_state["current_module"] = n
                         st.rerun()
@@ -414,7 +431,8 @@ def render_home():
 def render_module(n):
     render_topbar(show_back=True)
 
-    # Track visited modules
+    # Track visited modules (session + localStorage)
+    prog.mark_visited(n)
     if "visited" not in st.session_state:
         st.session_state["visited"] = set()
     st.session_state["visited"].add(n)
