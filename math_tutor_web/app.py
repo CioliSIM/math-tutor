@@ -259,6 +259,12 @@ def render_home():
 """, unsafe_allow_html=True)
 
                 if implemented:
+                    import prerequisites as px
+                    prereqs = px.get_prereq_names(n)
+                    prereq_str = ""
+                    if prereqs:
+                        prereq_str = f'<div style="font-family:\'DM Mono\',monospace;font-size:0.54rem;color:{ink2};margin-top:0.5rem;opacity:0.7;">needs: {", ".join(prereqs)}</div>'
+                    st.markdown(prereq_str, unsafe_allow_html=True)
                     if st.button(f"Open", key=f"open_{n}"):
                         st.session_state["current_module"] = n
                         st.rerun()
@@ -407,10 +413,41 @@ def render_home():
 
 def render_module(n):
     render_topbar(show_back=True)
+
+    # Track visited modules
+    if "visited" not in st.session_state:
+        st.session_state["visited"] = set()
+    st.session_state["visited"].add(n)
+
     mod = next((m for m in MODULES if m[0] == n), None)
     if not mod:
         return
     _, name, subtitle, category, implemented = mod
+
+    # Prerequisite advisory
+    import prerequisites as px
+    missing = px.get_missing(n, st.session_state["visited"])
+    if missing:
+        missing_names = [px.MODULE_NAMES[m] for m in missing]
+        names_str = " and ".join(f"<strong>{nm}</strong>" for nm in missing_names)
+        st.markdown(f"""
+<div style="background:{'#181510' if dark else '#fdf6ed'};
+            border:1px solid {'#3a2e1a' if dark else '#e8d8b8'};
+            border-left:3px solid {sand};
+            border-radius:0 10px 10px 0;
+            padding:1rem 1.3rem;margin-bottom:1.5rem;max-width:720px;">
+  <div style="font-family:'DM Mono',monospace;font-size:0.56rem;letter-spacing:0.16em;
+              text-transform:uppercase;color:{sand};margin-bottom:0.4rem;">
+    Before you begin
+  </div>
+  <div style="font-size:0.88rem;color:{ink2};line-height:1.75;">
+    This chapter builds on {names_str}. 
+    You can continue — but visiting {'those chapters' if len(missing)>1 else 'that chapter'} first 
+    will make the concepts here significantly clearer.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
     if not implemented:
         style.module_header(category, n, name, subtitle)
         style.coming_soon(n, name)
