@@ -329,17 +329,10 @@ def render_home():
                         prereq_str = f'<div style="font-family:\'DM Mono\',monospace;font-size:0.54rem;color:{ink2};margin-top:0.5rem;opacity:0.7;">needs: {", ".join(prereqs)}</div>'
                     visited_badge = f'<span style="font-family:\'DM Mono\',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:{sage};margin-left:0.5rem;">✓ visited</span>' if prog.is_visited(n) else ""
                     st.markdown(prereq_str + visited_badge, unsafe_allow_html=True)
-                    btn_col1, btn_col2 = st.columns(2, gap="small")
-                    with btn_col1:
-                        if st.button("Open", key=f"open_{n}"):
-                            st.session_state["current_module"] = n
-                            st.session_state["current_mode"] = "learn"
-                            st.rerun()
-                    with btn_col2:
-                        if st.button("Practice", key=f"prac_{n}"):
-                            st.session_state["current_module"] = n
-                            st.session_state["current_mode"] = "practice"
-                            st.rerun()
+                    if st.button("Open", key=f"open_{n}"):
+                        st.session_state["current_module"] = n
+                        st.session_state["current_mode"] = "learn"
+                        st.rerun()
 
     # ── Matches section ───────────────────────────────────────────────────────
     import random
