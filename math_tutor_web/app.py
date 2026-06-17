@@ -309,19 +309,50 @@ def render_home():
 </div>
 """, unsafe_allow_html=True)
 
-    # Level filter
-    level_choice = st.radio(
-        "Level",
-        ["All"] + mx.LEVEL_ORDER,
-        horizontal=True,
-        key="match_level",
-        label_visibility="collapsed",
-    )
+    # Filters
+    filter_col1, filter_col2 = st.columns([1, 2])
+    with filter_col1:
+        level_choice = st.radio(
+            "Level",
+            ["All"] + mx.LEVEL_ORDER,
+            horizontal=True,
+            key="match_level",
+            label_visibility="collapsed",
+        )
+    with filter_col2:
+        # Build chapter options from available problems
+        chapter_options = ["All chapters"]
+        seen = set()
+        for p in mx.PROBLEMS:
+            ch = p.get("chapter")
+            if ch and ch not in seen:
+                seen.add(ch)
+                mod = next((m for m in MODULES if m[0] == ch), None)
+                if mod:
+                    chapter_options.append(f"{ch:02d}. {mod[1]}")
+        chapter_options.append("Cross-chapter")
+        chapter_choice = st.selectbox(
+            "Chapter",
+            chapter_options,
+            key="match_chapter",
+            label_visibility="collapsed",
+        )
 
-    pool = mx.PROBLEMS if level_choice == "All" else [p for p in mx.PROBLEMS if p["level"] == level_choice]
+    # Build pool from filters
+    pool = mx.PROBLEMS
+    if level_choice != "All":
+        pool = [p for p in pool if p["level"] == level_choice]
+    if chapter_choice == "Cross-chapter":
+        pool = [p for p in pool if not p.get("chapter")]
+    elif chapter_choice != "All chapters":
+        ch_num = int(chapter_choice.split(".")[0])
+        pool = [p for p in pool if p.get("chapter") == ch_num]
 
-    # Pick a random problem (stable per session per level choice)
-    seed_key = f"match_seed_{level_choice}"
+    if not pool:
+        st.markdown(f'<div style="color:{ink2};font-size:0.88rem;padding:1rem 0;">No problems match this filter — try a different combination.</div>', unsafe_allow_html=True)
+        return
+
+    seed_key = f"match_seed_{level_choice}_{chapter_choice}"
     if seed_key not in st.session_state:
         st.session_state[seed_key] = random.randint(0, 10000)
 
