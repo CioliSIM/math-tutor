@@ -614,6 +614,9 @@ def render_module(n):
         style.coming_soon(n, name)
         return
 
+    import practice as prac
+    dark_mode = st.session_state.get("dark", False)
+
     if n == 1:
         from modules import step1;  step1.render(n, name, subtitle, category)
     elif n == 2:
@@ -658,6 +661,8 @@ def render_module(n):
         from modules import step21; step21.render(n, name, subtitle, category)
     elif n == 22:
         from modules import step22; step22.render(n, name, subtitle, category)
+
+    prac.render_practice(n, dark_mode)
 
 
 current = st.session_state.get("current_module")
