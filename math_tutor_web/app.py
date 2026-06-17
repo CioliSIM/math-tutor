@@ -167,77 +167,123 @@ def render_topbar(show_back=False):
 def render_home():
     render_topbar(show_back=False)
 
+    total    = len(MODULES)
+    visited  = len(prog.get_visited())
+    pct      = int(visited / total * 100)
+
     st.markdown(f"""
-<div style="max-width:680px;padding:0.5rem 0 0;">
-  <div style="font-family:'DM Mono',monospace;font-size:0.6rem;letter-spacing:0.22em;
-              text-transform:uppercase;color:{sand};margin-bottom:1.1rem;">
-    A curriculum in 22 chapters
+<style>
+@keyframes fadeIn {{
+  from {{ opacity:0; transform:translateY(18px); }}
+  to   {{ opacity:1; transform:translateY(0); }}
+}}
+@keyframes lineGrow {{
+  from {{ width: 0; }}
+  to   {{ width: 48px; }}
+}}
+@keyframes countUp {{
+  from {{ opacity:0; }}
+  to   {{ opacity:1; }}
+}}
+.hero-tag   {{ animation: fadeIn 0.5s ease 0.0s both; }}
+.hero-h1    {{ animation: fadeIn 0.6s ease 0.15s both; }}
+.hero-line  {{ animation: lineGrow 0.7s ease 0.35s both; }}
+.hero-p1    {{ animation: fadeIn 0.6s ease 0.45s both; }}
+.hero-p2    {{ animation: fadeIn 0.6s ease 0.60s both; }}
+.hero-p3    {{ animation: fadeIn 0.6s ease 0.75s both; }}
+.hero-stats {{ animation: fadeIn 0.6s ease 0.90s both; }}
+.hero-cta   {{ animation: fadeIn 0.6s ease 1.05s both; }}
+</style>
+
+<div style="max-width:760px;padding:1.5rem 0 0;">
+
+  <!-- Tag line -->
+  <div class="hero-tag" style="font-family:'DM Mono',monospace;font-size:0.58rem;
+              letter-spacing:0.28em;text-transform:uppercase;color:{sand};
+              margin-bottom:1.4rem;">
+    22 chapters · one language
   </div>
-  <h1 style="font-family:'Fraunces',serif;font-size:2.9rem;font-weight:400;
-             color:{ink};line-height:1.08;margin:0 0 1.4rem;">
-    Mathematics is<br>one language.
+
+  <!-- Main title -->
+  <h1 class="hero-h1" style="font-family:'Fraunces',serif;font-size:3.8rem;
+             font-weight:400;color:{ink};line-height:1.04;margin:0 0 0.6rem;
+             letter-spacing:-0.01em;">
+    Mathematics<br>
+    <span style="color:{warm};font-style:italic;">as a sport.</span>
   </h1>
-  <div style="width:48px;height:2px;background:{warm};margin-bottom:1.7rem;"></div>
-  <p style="font-size:0.97rem;font-weight:300;color:{ink2};line-height:1.85;
-            margin:0 0 0.85rem;max-width:580px;">
-    Not a collection of disconnected techniques — a single conversation
-    that has been going on for three thousand years. Algebra, geometry,
-    analysis, probability: different chapters of the same story,
-    written in the only language spoken identically in every country and every century.
+
+  <!-- Accent line animated -->
+  <div class="hero-line" style="height:2px;background:{warm};margin-bottom:2rem;width:48px;"></div>
+
+  <!-- Three punchy lines -->
+  <p class="hero-p1" style="font-size:1.08rem;font-weight:300;color:{ink};
+            line-height:1.75;margin:0 0 0.7rem;max-width:620px;">
+    Every athlete trains. Every athlete competes.<br>
+    Most mathematics students only ever train.
   </p>
-  <p style="font-size:0.97rem;font-weight:300;color:{ink2};line-height:1.85;
-            margin:0 0 0.85rem;max-width:580px;">
-    Learning mathematics is not so different from training for a sport.
-    There are <em>drills</em> — the exercises you repeat until the technique becomes automatic.
-    There is <em>theory</em> — understanding why the technique works, not just that it does.
-    And then there are <em>matches</em>: problems where you don't know in advance
-    which tool to use, where you have to read the situation and decide.
-    Most mathematics education stops at drills. This program doesn't.
+
+  <p class="hero-p2" style="font-size:1.08rem;font-weight:300;color:{ink2};
+            line-height:1.75;margin:0 0 0.7rem;max-width:620px;">
+    This program has both — <strong style="color:{ink};">drills</strong> that build technique,
+    and <strong style="color:{ink};">matches</strong> where you don't know which tool to use
+    before you start. That gap is where real mathematical thinking lives.
   </p>
-  <p style="font-size:0.97rem;font-weight:300;color:{ink2};line-height:1.85;
-            margin:0;max-width:580px;">
-    Each chapter starts from intuition — the <em>why</em> before the formula.
-    Work through them in order, or jump to what you need.
+
+  <p class="hero-p3" style="font-size:1.08rem;font-weight:300;color:{ink2};
+            line-height:1.75;margin:0 0 2.2rem;max-width:620px;">
+    22 chapters. From quadratic equations to the Gaussian integral.
+    Each one starts from intuition — the <em>why</em> before the formula.
     The goal is not to memorize, but to understand deeply enough
-    that you could reconstruct everything from scratch.
+    that you could reconstruct it from scratch.
   </p>
+
+  <!-- Stats row -->
+  <div class="hero-stats" style="display:flex;gap:0;border:1px solid {bdr};
+              border-radius:12px;background:{card};overflow:hidden;
+              width:fit-content;margin-bottom:0.6rem;">
+    <div style="padding:1rem 2rem;border-right:1px solid {bdr};text-align:center;">
+      <div style="font-family:'Fraunces',serif;font-size:2.2rem;color:{ink};
+                  line-height:1;font-weight:400;">{total}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.5rem;letter-spacing:0.18em;
+                  text-transform:uppercase;color:{ink2};margin-top:0.3rem;">chapters</div>
+    </div>
+    <div style="padding:1rem 2rem;border-right:1px solid {bdr};text-align:center;">
+      <div style="font-family:'Fraunces',serif;font-size:2.2rem;color:{sage};
+                  line-height:1;font-weight:400;">{visited}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.5rem;letter-spacing:0.18em;
+                  text-transform:uppercase;color:{ink2};margin-top:0.3rem;">visited</div>
+    </div>
+    <div style="padding:1rem 2rem;border-right:1px solid {bdr};text-align:center;">
+      <div style="font-family:'Fraunces',serif;font-size:2.2rem;color:{warm};
+                  line-height:1;font-weight:400;">55</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.5rem;letter-spacing:0.18em;
+                  text-transform:uppercase;color:{ink2};margin-top:0.3rem;">problems</div>
+    </div>
+    <div style="padding:1rem 2rem;text-align:center;">
+      <div style="font-family:'Fraunces',serif;font-size:2.2rem;color:{ink};
+                  line-height:1;font-weight:400;">∞</div>
+      <div style="font-family:'DM Mono',monospace;font-size:0.5rem;letter-spacing:0.18em;
+                  text-transform:uppercase;color:{ink2};margin-top:0.3rem;">patience</div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div style="width:420px;max-width:100%;height:3px;background:{bdr};
+              border-radius:2px;margin-bottom:2.5rem;overflow:hidden;">
+    <div style="width:{pct}%;height:100%;background:{warm};border-radius:2px;
+                transition:width 0.8s ease;"></div>
+  </div>
+
+  <!-- CTA -->
+  <div class="hero-cta" style="font-family:'DM Mono',monospace;font-size:0.62rem;
+              letter-spacing:0.18em;text-transform:uppercase;color:{ink2};
+              margin-bottom:3.5rem;">
+    ↓ &nbsp; select a chapter to begin
+  </div>
+
 </div>
 """, unsafe_allow_html=True)
 
-    total    = len(MODULES)
-    done     = sum(1 for m in MODULES if m[4])
-    visited  = len(prog.get_visited())
-    pct      = int(visited / total * 100)
-    st.markdown(f"""
-<div style="display:flex;gap:0;border:1px solid {bdr};border-radius:10px;
-            background:{card};overflow:hidden;width:fit-content;margin:2.2rem 0 0.5rem;">
-  <div style="padding:0.9rem 1.8rem;border-right:1px solid {bdr};">
-    <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{ink};line-height:1;">{total}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.16em;
-                text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Chapters</div>
-  </div>
-  <div style="padding:0.9rem 1.8rem;border-right:1px solid {bdr};">
-    <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{sage};line-height:1;">{visited}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.16em;
-                text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Visited</div>
-  </div>
-  <div style="padding:0.9rem 1.8rem;border-right:1px solid {bdr};">
-    <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{warm};line-height:1;">{pct}%</div>
-    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.16em;
-                text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Progress</div>
-  </div>
-  <div style="padding:0.9rem 1.8rem;">
-    <div style="font-family:'Fraunces',serif;font-size:1.9rem;color:{ink};line-height:1;">∞</div>
-    <div style="font-family:'DM Mono',monospace;font-size:0.52rem;letter-spacing:0.16em;
-                text-transform:uppercase;color:{ink2};margin-top:0.2rem;">Patience</div>
-  </div>
-</div>
-<div style="width:fit-content;min-width:320px;height:3px;background:{bdr};
-            border-radius:2px;margin-bottom:1.5rem;overflow:hidden;">
-  <div style="width:{pct}%;height:100%;background:{warm};
-              border-radius:2px;transition:width 0.5s ease;"></div>
-</div>
-""", unsafe_allow_html=True)
 
     for cat in CATEGORY_ORDER:
         cat_mods = [m for m in MODULES if m[3] == cat]
