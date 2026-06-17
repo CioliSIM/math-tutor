@@ -327,8 +327,24 @@ def render_home():
                     prereq_str = ""
                     if prereqs:
                         prereq_str = f'<div style="font-family:\'DM Mono\',monospace;font-size:0.54rem;color:{ink2};margin-top:0.5rem;opacity:0.7;">needs: {", ".join(prereqs)}</div>'
-                    visited_badge = f'<span style="font-family:\'DM Mono\',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:{sage};margin-left:0.5rem;">✓ visited</span>' if prog.is_visited(n) else ""
-                    st.markdown(prereq_str + visited_badge, unsafe_allow_html=True)
+
+                    # Comprehension score
+                    score = st.session_state.get(f"prac_score_{n}", 0)
+                    total = st.session_state.get(f"prac_total_{n}", 0)
+                    pct   = int(score / total * 100) if total > 0 else None
+
+                    visited_badge = ""
+                    if prog.is_visited(n):
+                        visited_badge = f'<span style="font-family:\'DM Mono\',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:{sage};">✓ visited</span>'
+                    if pct is not None:
+                        pct_color = warm if pct < 60 else sage
+                        visited_badge += f' &nbsp;<span style="font-family:\'DM Mono\',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:{pct_color};">{pct}% practice</span>'
+
+                    if visited_badge:
+                        st.markdown(f'<div style="margin-top:0.4rem;">{prereq_str}{visited_badge}</div>', unsafe_allow_html=True)
+                    elif prereq_str:
+                        st.markdown(prereq_str, unsafe_allow_html=True)
+
                     if st.button("Open", key=f"open_{n}"):
                         st.session_state["current_module"] = n
                         st.session_state["current_mode"] = "learn"
@@ -602,6 +618,25 @@ def render_module(n):
                      type="primary" if mode == "practice" else "secondary"):
             st.session_state["current_mode"] = "practice"
             st.rerun()
+
+    # Comprehension indicator
+    score = st.session_state.get(f"prac_score_{n}", 0)
+    total = st.session_state.get(f"prac_total_{n}", 0)
+    if total > 0:
+        pct       = int(score / total * 100)
+        pct_color = "#d4703a" if dark_mode else "#c8602a"
+        if pct >= 70: pct_color = "#4a8070" if dark_mode else "#2d5a4e"
+        with tab_col3:
+            st.markdown(f"""
+<div style="display:flex;align-items:center;gap:0.8rem;padding:0.35rem 0;">
+  <div style="font-family:'DM Mono',monospace;font-size:0.62rem;color:{ink2};">
+    Practice: <strong style="color:{pct_color};">{pct}%</strong> ({score}/{total})
+  </div>
+  <div style="width:80px;height:4px;background:{bdr};border-radius:2px;overflow:hidden;">
+    <div style="width:{pct}%;height:100%;background:{pct_color};border-radius:2px;"></div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
     st.markdown(f'<div style="height:1px;background:{bdr};margin:0.5rem 0 1.5rem;"></div>',
                 unsafe_allow_html=True)
