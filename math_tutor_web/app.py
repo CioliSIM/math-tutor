@@ -179,17 +179,24 @@ def render_home():
             margin:0 0 0.85rem;max-width:580px;">
     Not a collection of disconnected techniques — a single conversation
     that has been going on for three thousand years. Algebra, geometry,
-    analysis, probability: different chapters of the same story.
+    analysis, probability: different chapters of the same story,
+    written in the only language spoken identically in every country and every century.
   </p>
   <p style="font-size:0.97rem;font-weight:300;color:{ink2};line-height:1.85;
             margin:0 0 0.85rem;max-width:580px;">
-    Each chapter starts from intuition, not formulas. You will understand
-    <em>why</em> the derivative is a slope, the integral an area,
-    and why these two ideas are secretly the same operation.
+    Learning mathematics is not so different from training for a sport.
+    There are <em>drills</em> — the exercises you repeat until the technique becomes automatic.
+    There is <em>theory</em> — understanding why the technique works, not just that it does.
+    And then there are <em>matches</em>: problems where you don't know in advance
+    which tool to use, where you have to read the situation and decide.
+    Most mathematics education stops at drills. This program doesn't.
   </p>
   <p style="font-size:0.97rem;font-weight:300;color:{ink2};line-height:1.85;
             margin:0;max-width:580px;">
-    Select a chapter below to begin.
+    Each chapter starts from intuition — the <em>why</em> before the formula.
+    Work through them in order, or jump to what you need.
+    The goal is not to memorize, but to understand deeply enough
+    that you could reconstruct everything from scratch.
   </p>
 </div>
 """, unsafe_allow_html=True)
